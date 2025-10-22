@@ -1,7 +1,6 @@
-const mongoose = require("mongoose");
-const { Schema } = mongoose;
+import mongoose from "mongoose";
 
-const CustomerSchema = new Schema(
+const CustomerSchema = new mongoose.Schema(
     {
         companyName: { type: String, required: true, trim: true },
         contactPerson: { type: String, required: true, trim: true, index: true },
@@ -22,4 +21,6 @@ const CustomerSchema = new Schema(
     { timestamps: true }
 );
 
-module.exports = mongoose.model("Customer", CustomerSchema);
+const Customer = mongoose.model("Customer", CustomerSchema);
+
+export default Customer;

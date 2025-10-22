@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
+import customerRoutes from "./routes/customersRoute.js";
+import salesRoute from "./routes/salesRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
 
@@ -29,6 +31,8 @@ app.get("/", (req, res) => {
 
 connectDB();
 app.use("/api/users", userRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/sales", salesRoute);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir`));
