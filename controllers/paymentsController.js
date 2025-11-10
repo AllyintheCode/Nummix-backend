@@ -1,11 +1,11 @@
-import Customer from "../models/customersSchema";
-import Payment from "../models/paymentsSchema";
+import Customer from "../models/customersSchema.js";
+import Payment from "../models/paymentsSchema.js";
 
 export const getALLPayments = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
 
-        const payments = await Payment.find({ $text: { $search: searchQuery } }).sort({
+        const payments = await Payment.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
             createdAt: -1,
         });
 
@@ -25,7 +25,7 @@ export const getALLPayments = async (req, res) => {
 export const getSinglePayment = async (req, res) => {
     try {
         const { id } = req.params;
-        const payment = await Payment.findById(id);
+        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
             return res.status(404).json({ message: "Payment not found." });
@@ -54,6 +54,7 @@ export const createPayment = async (req, res) => {
         }
 
         const newPayment = new Payment({
+            userId: req.user?._id,
             date,
             customerId,
             invoiceNumber,
@@ -76,7 +77,7 @@ export const createPayment = async (req, res) => {
 export const editPayment = async (req, res) => {
     try {
         const { id } = req.params;
-        const payment = await Payment.findById(id);
+        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
             return res.status(404).json({ message: "Payment record not found." });
@@ -106,7 +107,7 @@ export const editPayment = async (req, res) => {
 export const changePaymentStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const payment = await Payment.findById(id);
+        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
             return res.status(404).json({ message: "Payment record not found." });

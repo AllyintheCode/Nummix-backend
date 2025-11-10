@@ -4,8 +4,8 @@ import Sale from "../models/salesSchema.js";
 export const getAllSales = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
-        
-        const sales = await Sale.find({ $text: { $search: searchQuery } }).sort({
+
+        const sales = await Sale.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
             createdAt: -1,
         });
 
@@ -25,7 +25,7 @@ export const getAllSales = async (req, res) => {
 export const getSingleSale = async (req, res) => {
     try {
         const { id } = req.params;
-        const sale = await Sale.findById(id);
+        const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
             return res.status(404).json({ message: "Sale record not found." });
@@ -54,6 +54,7 @@ export const createSale = async (req, res) => {
         }
 
         const newSale = new Sale({
+            userId: req.user?._id,
             invoiceNumber,
             date,
             customerId,
@@ -75,7 +76,7 @@ export const createSale = async (req, res) => {
 export const editSale = async (req, res) => {
     try {
         const { id } = req.params;
-        const sale = await Sale.findById(id);
+        const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
             return res.status(404).json({ message: "Sale record not found." });
@@ -104,7 +105,7 @@ export const editSale = async (req, res) => {
 export const changeSaleStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const sale = await Sale.findById(id);
+        const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
             return res.status(404).json({ message: "Sale record not found." });

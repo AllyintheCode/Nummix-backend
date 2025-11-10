@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const AgreementSchema = new mongoose.Schema(
     {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         agreementNumber: { type: String, required: true, trim: true, unique: true },
         supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
         startDate: { type: Date, required: true },

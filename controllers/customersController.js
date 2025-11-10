@@ -4,7 +4,10 @@ export const getAllCustomers = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
 
-        const customers = await Customer.find({ $text: { $search: searchQuery } }).sort({
+        const customers = await Customer.find({
+            userId: req.user?._id,
+            $text: { $search: searchQuery },
+        }).sort({
             createdAt: -1,
         });
 
@@ -24,7 +27,7 @@ export const getAllCustomers = async (req, res) => {
 export const getSingleCustomer = async (req, res) => {
     try {
         const { id } = req.params;
-        const customer = await Customer.findById(id);
+        const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {
             return res.status(404).json({ message: "Customer not found." });
@@ -48,6 +51,7 @@ export const createCustomer = async (req, res) => {
         }
 
         const newCustomer = new Customer({
+            userId: req.user?._id,
             companyName,
             contactPerson,
             email,
@@ -71,7 +75,7 @@ export const createCustomer = async (req, res) => {
 export const editCustomer = async (req, res) => {
     try {
         const { id } = req.params;
-        const customer = await Customer.findById(id);
+        const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {
             return res.status(404).json({ message: "Customer not found." });
@@ -99,7 +103,7 @@ export const editCustomer = async (req, res) => {
 export const changeCustomerStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const customer = await Customer.findById(id);
+        const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {
             return res.status(404).json({ message: "Customer not found." });

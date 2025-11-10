@@ -5,7 +5,10 @@ export const getAllAgreements = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
 
-        const agreements = await Agreement.find({ $text: { $search: searchQuery } }).sort({
+        const agreements = await Agreement.find({
+            userId: req.user?._id,
+            $text: { $search: searchQuery },
+        }).sort({
             createdAt: -1,
         });
 
@@ -25,7 +28,7 @@ export const getAllAgreements = async (req, res) => {
 export const getSingleAgreement = async (req, res) => {
     try {
         const { id } = req.params;
-        const agreement = await Agreement.findById(id);
+        const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
 
         if (!agreement) {
             return res.status(404).json({ message: "Agreement not found." });
@@ -54,6 +57,7 @@ export const createAgreement = async (req, res) => {
         }
 
         const newAgreement = new Agreement({
+            userId: req.user?._id,
             agreementNumber,
             supplierId,
             startDate,
@@ -78,7 +82,7 @@ export const createAgreement = async (req, res) => {
 export const editAgreement = async (req, res) => {
     try {
         const { id } = req.params;
-        const agreement = await Agreement.findById(id);
+        const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
 
         if (!agreement) {
             return res.status(404).json({ message: "Agreement not found." });
@@ -109,7 +113,7 @@ export const editAgreement = async (req, res) => {
 export const changeAgreementStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const agreement = await Agreement.findById(id);
+        const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
 
         if (!agreement) {
             return res.status(404).json({ message: "Agreement not found." });

@@ -4,7 +4,10 @@ export const getAllSuppliers = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
 
-        const suppliers = await Supplier.find({ $text: { $search: searchQuery } }).sort({
+        const suppliers = await Supplier.find({
+            userId: req.user?._id,
+            $text: { $search: searchQuery },
+        }).sort({
             createdAt: -1,
         });
 
@@ -24,7 +27,7 @@ export const getAllSuppliers = async (req, res) => {
 export const getSingleSupplier = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplier = await Supplier.findById(id);
+        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
@@ -48,6 +51,7 @@ export const createSupplier = async (req, res) => {
         }
 
         const newSupplier = new Supplier({
+            userId: req.user?._id,
             companyName,
             taxId,
             contactName,
@@ -70,7 +74,7 @@ export const createSupplier = async (req, res) => {
 export const editSupplier = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplier = await Supplier.findById(id);
+        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
@@ -97,7 +101,7 @@ export const editSupplier = async (req, res) => {
 export const changeSupplierStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplier = await Supplier.findById(id);
+        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });

@@ -6,7 +6,7 @@ export const getAllSupplierPayments = async (req, res) => {
         const searchQuery = req.query.search || "";
 
         const supplierPayments = await SupplierPayment.find({
-            isActive: true,
+            userId: req.user?._id,
             $text: { $search: searchQuery },
         }).sort({
             createdAt: -1,
@@ -28,7 +28,7 @@ export const getAllSupplierPayments = async (req, res) => {
 export const getSingleSupplierPayment = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplierPayment = await SupplierPayment.findById(id);
+        const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {
             return res.status(404).json({ message: "Supplier payment not found." });
@@ -47,7 +47,7 @@ export const createSupplierPayment = async (req, res) => {
     try {
         const { paymentNumber, supplierId, amount, balance, dueDate, paid, status } = req.body;
 
-        if (!paymentNumber || !supplier || amount == null || balance == null || !dueDate) {
+        if (!paymentNumber || !supplierId || amount == null || balance == null || !dueDate) {
             return res.status(400).json({ message: "All required fields must be provided." });
         }
 
@@ -57,8 +57,9 @@ export const createSupplierPayment = async (req, res) => {
         }
 
         const newSupplierPayment = new SupplierPayment({
+            userId: req.user?._id,
             paymentNumber,
-            supplier,
+            supplierId,
             amount,
             balance,
             dueDate,
@@ -80,7 +81,7 @@ export const createSupplierPayment = async (req, res) => {
 export const editSupplierPayment = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplierPayment = await SupplierPayment.findById(id);
+        const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {
             return res.status(404).json({ message: "Supplier payment not found." });
@@ -93,9 +94,13 @@ export const editSupplierPayment = async (req, res) => {
         supplierPayment.paid = req.body.paid ?? supplierPayment.paid;
         supplierPayment.status = req.body.status || supplierPayment.status;
 
-        const supplier = await Supplier.findById(req.body.supplierId);
-
-        supplierPayment.supplierId = req.body.supplierId ? supplier._id : supplierPayment.supplierId;
+        if (req.body.supplierId) {
+            const supplier = await Supplier.findById(req.body.supplierId);
+            if (!supplier) {
+                return res.status(404).json({ message: "Supplier not found." });
+            }
+            supplierPayment.supplierId = supplier._id;
+        }
 
         await supplierPayment.save();
 
@@ -111,7 +116,7 @@ export const editSupplierPayment = async (req, res) => {
 export const changeSupplierPaymentStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const supplierPayment = await SupplierPayment.findById(id);
+        const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {
             return res.status(404).json({ message: "Supplier payment not found." });

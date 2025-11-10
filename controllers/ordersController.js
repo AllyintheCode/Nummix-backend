@@ -5,7 +5,7 @@ export const getAllOrders = async (req, res) => {
     try {
         const searchQuery = req.query.search || "";
 
-        const orders = await Order.find({ isActive: true, $text: { $search: searchQuery } }).sort({
+        const orders = await Order.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
             createdAt: -1,
         });
 
@@ -25,7 +25,7 @@ export const getAllOrders = async (req, res) => {
 export const getSingleOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await Order.findById(id);
+        const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -54,6 +54,7 @@ export const createOrder = async (req, res) => {
         }
 
         const newOrder = new Order({
+            userId: req.user?._id,
             orderNumber,
             supplierId,
             date,
@@ -76,7 +77,7 @@ export const createOrder = async (req, res) => {
 export const editOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await Order.findById(id);
+        const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -86,6 +87,7 @@ export const editOrder = async (req, res) => {
         order.date = req.body.date || order.date;
         order.deliveryDate = req.body.deliveryDate || order.deliveryDate;
         order.amount = req.body.amount ?? order.amount;
+        order.status = req.body.status || order.status;
 
         const supplier = await Supplier.findById(req.body.supplierId);
         order.supplierId = req.body.supplierId ? supplier._id : order.supplierId;
@@ -104,28 +106,7 @@ export const editOrder = async (req, res) => {
 export const changeOrderStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await Order.findById(id);
-
-        if (!order) {
-            return res.status(404).json({ message: "Order not found." });
-        }
-
-        order.status = req.body.status || order.status;
-        await order.save();
-
-        res.status(200).json({
-            message: "Order status updated successfully",
-            data: order,
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Internal server error." });
-    }
-};
-
-export const changeOrderActiveStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const order = await Order.findById(id);
+        const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });

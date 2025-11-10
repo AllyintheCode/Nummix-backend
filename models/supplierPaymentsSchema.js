@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const SupplierPaymentSchema = new mongoose.Schema(
     {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         paymentNumber: { type: String, required: true, trim: true, unique: true },
         supplierId: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
         amount: { type: Number, required: true },
