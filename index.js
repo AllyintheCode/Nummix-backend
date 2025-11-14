@@ -8,6 +8,10 @@ import transactionRoutes from "./routes/transactionRoutes.js";
 import cashAndBankRoutes from "./routes/cashAndBankRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import budgetRoutes from "./routes/budgetRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import generalLedgerRoutes from "./routes/generalLedgerRoutes.js";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./swaggerOptions.js";
 dotenv.config();
 const app = express();
 // middlewares
@@ -19,6 +23,9 @@ const limiter = rateLimit({
   max: 10, // hər IP maksimum 10 sorğu
   message: "Çox sorğu göndərdiniz, bir az gözləyin",
 });
+
+// Swagger UI
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // test route
 app.get("/", (req, res) => {
@@ -32,6 +39,8 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/cash-bank", cashAndBankRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/general-ledger", generalLedgerRoutes);
 connectDB();
 
 const PORT = process.env.PORT || 5000;
