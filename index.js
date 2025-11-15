@@ -11,6 +11,7 @@ import ordersRoute from "./routes/ordersRoute.js";
 import productsRoute from "./routes/productsRoute.js";
 import warehousesRoute from "./routes/warehousesRoute.js";
 import warehouseOperationsRoute from "./routes/warehouseOperationsRoute.js";
+import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
 
@@ -47,6 +48,7 @@ app.use("/api/orders", ordersRoute);
 app.use("/api/products", productsRoute);
 app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
+app.use("/api/inventory", inventoryRoute);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir`));
