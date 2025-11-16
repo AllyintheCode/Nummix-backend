@@ -7,7 +7,7 @@ import {
   resendOtp,
   forgotPassword,
   resetPassword,
-    getAllUsers,
+  getAllUsers,
   getUserById,
   updateUser,
   deleteUser,
@@ -23,10 +23,9 @@ import {
   getAllEvents,
   getEventById,
   getCalendarDayById,
-
 } from "../controllers/userController.js";
 import protect from "../middlewares/authMiddleware.js";
-import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
+import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
 
 const router = express.Router();
 
@@ -176,7 +175,6 @@ router.post("/reset-password", resetPassword);
 // 🔐 Auth Routes
 router.post("/register", registerUser);
 router.post("/login", loginUser);
-
 
 // 👥 User CRUD Routes
 router.get("/", getAllUsers);
