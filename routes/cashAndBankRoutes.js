@@ -1,6 +1,7 @@
-const express = require("express");
+import express from "express";
+import cashAndBankController from "../controllers/CashAndBankController.js";
+
 const router = express.Router();
-const cashAndBankController = require("../controllers/CashAndBankController");
 
 /**
  * @swagger
@@ -109,4 +110,4 @@ router.put("/:id", cashAndBankController.updateTransaction);
  */
 router.delete("/:id", cashAndBankController.deleteTransaction);
 
-module.exports = router;
+export default router;

@@ -1,5 +1,4 @@
-// models/CashAndBank.js
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const CashAndBankSchema = new mongoose.Schema({
   operationType: {
@@ -30,14 +29,14 @@ const CashAndBankSchema = new mongoose.Schema({
     enum: ["Pasha Bank", "Rabite", "Kapital", "ABB"],
     required: function () {
       return this.type === "bank";
-    }, // yalnız bank seçiləndə tələb olunur
+    },
   },
   description: {
     type: String,
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // users collection
+    ref: "User",
     required: true,
   },
   createdAt: {
@@ -46,4 +45,7 @@ const CashAndBankSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model("CashAndBank", CashAndBankSchema);
+const CashAndBank = mongoose.model("CashAndBank", CashAndBankSchema);
+
+// 🔹 Default export ESM üçün
+export default CashAndBank;
