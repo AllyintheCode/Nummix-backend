@@ -1,0 +1,88 @@
+Nummix Backend HTTP Endpoint List (Excluding User Controller)
+Generated: 2025-11-19
+
+Notes:
+- All endpoints (except health check) require authentication middleware `protect`.
+- Payments routes file exists but is NOT mounted in `index.js`; add `app.use('/api/payments', paymentsRoute);` to enable.
+- Status change operations use PATCH with a `/status` suffix.
+- `{id}` denotes a path parameter.
+
+Health / System:
+GET /
+
+Customers:
+GET /api/customers               -> list customers
+GET /api/customers/{id}          -> get single customer
+POST /api/customers              -> create customer
+PATCH /api/customers/{id}/status -> change customer status
+
+Sales:
+GET /api/sales                   -> list sales
+GET /api/sales/{id}              -> get single sale
+POST /api/sales                  -> create sale
+PATCH /api/sales/{id}            -> edit sale
+PATCH /api/sales/{id}/status     -> change sale status
+
+Suppliers:
+GET /api/suppliers               -> list suppliers
+GET /api/suppliers/{id}          -> get single supplier
+POST /api/suppliers              -> create supplier
+PATCH /api/suppliers/{id}        -> edit supplier
+PATCH /api/suppliers/{id}/status -> change supplier status
+
+Agreements:
+GET /api/agreements               -> list agreements
+GET /api/agreements/{id}          -> get single agreement
+POST /api/agreements              -> create agreement
+PATCH /api/agreements/{id}        -> edit agreement
+PATCH /api/agreements/{id}/status -> change agreement status
+
+Supplier Payments:
+GET /api/supplier-payments               -> list supplier payments
+GET /api/supplier-payments/{id}          -> get single supplier payment
+POST /api/supplier-payments              -> create supplier payment
+PATCH /api/supplier-payments/{id}        -> edit supplier payment
+PATCH /api/supplier-payments/{id}/status -> change supplier payment status
+
+Orders:
+GET /api/orders               -> list orders
+GET /api/orders/{id}          -> get single order
+POST /api/orders              -> create order
+PATCH /api/orders/{id}        -> edit order
+PATCH /api/orders/{id}/status -> change order status
+
+Products:
+GET /api/products               -> list products
+GET /api/products/{id}          -> get single product
+POST /api/products              -> create product
+PATCH /api/products/{id}        -> edit product
+PATCH /api/products/{id}/status -> change product status
+
+Warehouses:
+GET /api/warehouses               -> list warehouses
+GET /api/warehouses/{id}          -> get single warehouse
+POST /api/warehouses              -> create warehouse
+PATCH /api/warehouses/{id}        -> edit warehouse
+PATCH /api/warehouses/{id}/status -> change warehouse status
+
+Warehouse Operations:
+POST /api/warehouse-operations/grn      -> create GRN (goods receipt)
+POST /api/warehouse-operations/delivery -> create delivery
+POST /api/warehouse-operations/transfer -> create transfer
+GET  /api/warehouse-operations/history  -> get warehouse operations history
+
+Inventory:
+GET /api/inventory               -> list inventory records
+GET /api/inventory/{id}          -> get single inventory record
+POST /api/inventory              -> create inventory record
+PATCH /api/inventory/{id}        -> edit inventory record
+PATCH /api/inventory/{id}/status -> change inventory status
+
+Payments (NOT currently mounted):
+GET /api/payments               -> list payments
+GET /api/payments/{id}          -> get single payment
+POST /api/payments              -> create payment
+PATCH /api/payments/{id}        -> edit payment
+PATCH /api/payments/{id}/status -> change payment status
+
+End of list.
