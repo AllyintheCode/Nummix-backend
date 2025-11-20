@@ -52,7 +52,7 @@ export const getProductById = async (req, res) => {
 };
 
 // 🔹 Yeni məhsul əlavə et
-export const postProduct = async (req, res) => {
+export const createProduct = async (req, res) => {
   try {
     const {
       SKU,
@@ -143,13 +143,11 @@ export const editProduct = async (req, res) => {
       data: product,
     });
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Internal server error.",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+      error: err.message,
+    });
   }
 };
 
@@ -201,12 +199,10 @@ export const changeProductStatus = async (req, res) => {
       data: product,
     });
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Internal server error.",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+      error: err.message,
+    });
   }
 };
