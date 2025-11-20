@@ -22,7 +22,6 @@ const options = {
     "./routes/dashboardRoutes.js",
     "./routes/transactionRoutes.js",
     "./routes/cashAndBankRoutes.js",
-    "./routes/paymentRoutes.js",
     "./routes/userRoutes.js",
     "./routes/generalLedgerRoutes.js",
     "./controllers/BudgetController.js",
