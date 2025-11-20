@@ -48,7 +48,7 @@ export const createSale = async (req, res) => {
             return res.status(400).json({ message: "All fields are required." });
         }
 
-        const customer = await Customer.findById(customerId);
+        const customer = await Customer.findOne({ _id: customerId, userId: req.user?._id });
         if (!customer) {
             return res.status(404).json({ message: "Customer not found." });
         }
@@ -87,9 +87,13 @@ export const editSale = async (req, res) => {
         sale.amount = req.body.amount || sale.amount;
         sale.status = req.body.status || sale.status;
 
-        const customer = await Customer.findById(req.body.customerId);
-
-        sale.customerId = req.body.customerId ? customer._id : sale.customerId;
+        if (req.body.customerId) {
+            const customer = await Customer.findOne({ _id: req.body.customerId, userId: req.user?._id });
+            if (!customer) {
+                return res.status(404).json({ message: "Customer not found." });
+            }
+            sale.customerId = customer._id;
+        }
 
         await sale.save();
 

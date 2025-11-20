@@ -48,7 +48,7 @@ export const createPayment = async (req, res) => {
             return res.status(400).json({ message: "All fields are required." });
         }
 
-        const customer = await Customer.findById(customerId);
+        const customer = await Customer.findOne({ _id: customerId, userId: req.user?._id });
         if (!customer) {
             return res.status(404).json({ message: "Customer not found." });
         }
@@ -89,9 +89,13 @@ export const editPayment = async (req, res) => {
         payment.method = req.body.method || payment.method;
         payment.status = req.body.status || payment.status;
 
-        const customer = await Customer.findById(req.body.customerId);
-
-        payment.customerId = req.body.customerId ? customer._id : payment.customerId;
+        if (req.body.customerId) {
+            const customer = await Customer.findOne({ _id: req.body.customerId, userId: req.user?._id });
+            if (!customer) {
+                return res.status(404).json({ message: "Customer not found." });
+            }
+            payment.customerId = customer._id;
+        }
 
         await payment.save();
 

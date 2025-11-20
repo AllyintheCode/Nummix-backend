@@ -51,7 +51,7 @@ export const createAgreement = async (req, res) => {
             return res.status(400).json({ message: "All required fields must be provided." });
         }
 
-        const supplier = await Supplier.findById(supplierId);
+        const supplier = await Supplier.findOne({ _id: supplierId, userId: req.user?._id });
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
         }
@@ -96,8 +96,13 @@ export const editAgreement = async (req, res) => {
         agreement.terms = req.body.terms || agreement.terms;
         agreement.notes = req.body.notes || agreement.notes;
 
-        const supplier = await Supplier.findById(req.body.supplierId);
-        agreement.supplierId = req.body.supplierId ? supplier._id : agreement.supplierId;
+        if (req.body.supplierId) {
+            const supplier = await Supplier.findOne({ _id: req.body.supplierId, userId: req.user?._id });
+            if (!supplier) {
+                return res.status(404).json({ message: "Supplier not found." });
+            }
+            agreement.supplierId = supplier._id;
+        }
 
         await agreement.save();
 

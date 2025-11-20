@@ -48,7 +48,7 @@ export const createOrder = async (req, res) => {
             return res.status(400).json({ message: "All required fields must be provided." });
         }
 
-        const supplier = await Supplier.findById(supplierId);
+        const supplier = await Supplier.findOne({ _id: supplierId, userId: req.user?._id });
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
         }
@@ -89,8 +89,13 @@ export const editOrder = async (req, res) => {
         order.amount = req.body.amount ?? order.amount;
         order.status = req.body.status || order.status;
 
-        const supplier = await Supplier.findById(req.body.supplierId);
-        order.supplierId = req.body.supplierId ? supplier._id : order.supplierId;
+        if (req.body.supplierId) {
+            const supplier = await Supplier.findOne({ _id: req.body.supplierId, userId: req.user?._id });
+            if (!supplier) {
+                return res.status(404).json({ message: "Supplier not found." });
+            }
+            order.supplierId = supplier._id;
+        }
 
         await order.save();
 
