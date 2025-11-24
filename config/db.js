@@ -7,6 +7,7 @@ export const connectDB = async () => {
       useUnifiedTopology: true,
     });
 
+
     console.log(`MongoDB qoşuldu: ${conn.connection.host}`);
   } catch (error) {
     console.error(`MongoDB xətası: ${error.message}`);
