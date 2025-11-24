@@ -38,8 +38,7 @@ import {
   generateAccountingReport,
   createSampleAccountingTransaction,
   updateAccountingEntry,
-  deleteAccountingEntry
-
+  deleteAccountingEntry,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -263,6 +262,19 @@ const router = express.Router();
 
 // 🔐 AUTH ROUTES
 
+
+// Get profile - protect middleware ilə
+router.get("/profile", protect, getProfile);
+
+// OTP verify & resend - rate limiter ilə
+router.post("/verify-otp", otpLimiter, verifyOtp);
+router.post("/resend-otp", otpLimiter, resendOtp);
+
+// Şifrə unudulub
+router.post("/forgot-password", forgotPassword);
+
+// Şifrə reset
+router.post("/reset-password/:token", resetPassword);
 /**
  * @swagger
  * /api/users/register:
@@ -328,7 +340,7 @@ router.post("/register", registerUser);
  *       500:
  *         description: Daxili server xətası
  */
-router.post("/login", loginUser);
+router.post("/login", loginLimiter, loginUser);
 
 // 👥 USER CRUD ROUTES
 
@@ -647,7 +659,7 @@ router.put("/:id/company-taxes", updateCompanyTaxes);
  *                       type: number
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   put:
  *     summary: İşçi axını məlumatlarını yenilə
  *     tags: [Financial]
@@ -762,7 +774,7 @@ router.get("/:id/payment-overview", getPaymentOverview);
  *         description: Təqvim günü uğurla yaradıldı
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   get:
  *     summary: Bütün təqvim günlərini gətir
  *     tags: [Calendar]
@@ -837,7 +849,7 @@ router.get("/:id/calendar", getAllCalendar);
  *                   $ref: '#/components/schemas/CalendarDay'
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   put:
  *     summary: Təqvim gününü yenilə
  *     tags: [Calendar]
@@ -870,7 +882,7 @@ router.get("/:id/calendar", getAllCalendar);
  *         description: Təqvim günü uğurla yeniləndi
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   delete:
  *     summary: Təqvim gününü sil
  *     tags: [Calendar]
@@ -927,7 +939,7 @@ router.delete("/:id/calendar/:dayId", deleteCalendarDay);
  *         description: Hadisə uğurla yaradıldı
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   get:
  *     summary: Bütün hadisələri gətir
  *     tags: [Events]
@@ -1002,7 +1014,7 @@ router.get("/:id/calendar/:dayId/events", getAllEvents);
  *                   $ref: '#/components/schemas/Event'
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   put:
  *     summary: Hadisəni yenilə
  *     tags: [Events]
@@ -1034,7 +1046,7 @@ router.get("/:id/calendar/:dayId/events", getAllEvents);
  *         description: Hadisə uğurla yeniləndi
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   delete:
  *     summary: Hadisəni sil
  *     tags: [Events]
@@ -1091,7 +1103,7 @@ router.delete("/:id/calendar/:dayId/events/:eventId", deleteEvent);
  *         description: Yazılış uğurla əlavə edildi
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
- * 
+ *
  *   get:
  *     summary: Bütün yazılışları gətir
  *     tags: [Accounting]
@@ -1369,4 +1381,3 @@ router.put("/:id/accounting/entries/:entryId", updateAccountingEntry);
 router.delete("/:id/accounting/entries/:entryId", deleteAccountingEntry);
 
 export default router;
-
