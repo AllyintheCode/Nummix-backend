@@ -7,7 +7,6 @@ const PaymentSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    // Supplier və ya Customer ilə əlaqə
     supplierName: {
       type: String,
       required: function () {
@@ -21,35 +20,12 @@ const PaymentSchema = new mongoose.Schema(
         return !this.supplierName;
       },
     },
-
-    invoiceNumber: {
-      type: String,
-      trim: true,
-      unique: true,
-      sparse: true, // eyni anda null ola bilsin
-    },
-
-    type: {
-      type: String,
-      enum: ["outflow", "receipt"],
-      required: true,
-    },
-    category: {
-      type: String,
-      required: false, // optional, ilk modeldə required idi
-    },
-    date: {
-      type: Date,
-      required: true,
-    },
-    dueDate: {
-      type: Date,
-      required: false, // optional, ilk modeldə var idi
-    },
-    amount: {
-      type: Number,
-      required: true,
-    },
+    invoiceNumber: { type: String, trim: true, unique: true, sparse: true },
+    type: { type: String, enum: ["outflow", "receipt"], required: true },
+    category: { type: String, required: false },
+    date: { type: Date, required: true },
+    dueDate: { type: Date, required: false },
+    amount: { type: Number, required: true },
     currency: {
       type: String,
       enum: ["AZN", "USD", "RUB", "EUR"],
@@ -73,14 +49,8 @@ const PaymentSchema = new mongoose.Schema(
       ],
       default: "planned",
     },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+    isActive: { type: Boolean, default: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
@@ -89,18 +59,18 @@ const PaymentSchema = new mongoose.Schema(
 PaymentSchema.pre("save", function (next) {
   const today = new Date();
   if (!["completed", "Completed", "Cancelled"].includes(this.status)) {
-    if (this.dueDate && this.dueDate < today) {
-      this.status = "overdue";
-    } else if (
+    if (this.dueDate && this.dueDate < today) this.status = "overdue";
+    else if (
       this.dueDate &&
       this.dueDate.toDateString() === today.toDateString()
-    ) {
+    )
       this.status = "pending";
-    } else {
-      this.status = "planned";
-    }
+    else this.status = "planned";
   }
   next();
 });
+
+// Burada text index yaradılır
+PaymentSchema.index({ invoiceNumber: "text", supplierName: "text" });
 
 export default mongoose.model("Payment", PaymentSchema);
