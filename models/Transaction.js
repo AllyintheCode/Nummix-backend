@@ -40,6 +40,7 @@ const transactionSchema = new mongoose.Schema(
         type: String,
         required: true,
         trim: true,
+        default: "Admin User",
       },
       userId: {
         type: mongoose.Schema.Types.ObjectId,
