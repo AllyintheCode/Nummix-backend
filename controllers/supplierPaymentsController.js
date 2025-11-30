@@ -28,6 +28,9 @@ export const getAllSupplierPayments = async (req, res) => {
 export const getSingleSupplierPayment = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier payment ID must be provided." });
+        }
         const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {
@@ -81,6 +84,9 @@ export const createSupplierPayment = async (req, res) => {
 export const editSupplierPayment = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier payment ID must be provided." });
+        }
         const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {
@@ -116,6 +122,9 @@ export const editSupplierPayment = async (req, res) => {
 export const changeSupplierPaymentStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier payment ID must be provided." });
+        }
         const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplierPayment) {

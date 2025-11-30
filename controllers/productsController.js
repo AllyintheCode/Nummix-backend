@@ -24,6 +24,9 @@ export const getAllProducts = async (req, res) => {
 export const getSingleProduct = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Product ID must be provided." });
+        }
         const product = await Product.findOne({ _id: id, userId: req.user?._id });
 
         if (!product) {
@@ -96,6 +99,9 @@ export const createProduct = async (req, res) => {
 export const editProduct = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Product ID must be provided." });
+        }
         const product = await Product.findOne({ _id: id, userId: req.user?._id });
 
         if (!product) {
@@ -127,6 +133,9 @@ export const editProduct = async (req, res) => {
 export const changeProductStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Product ID must be provided." });
+        }
         const product = await Product.findOne({ _id: id, userId: req.user?._id });
 
         if (!product) {

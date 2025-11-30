@@ -27,6 +27,9 @@ export const getAllSuppliers = async (req, res) => {
 export const getSingleSupplier = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier ID must be provided." });
+        }
         const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {
@@ -74,6 +77,9 @@ export const createSupplier = async (req, res) => {
 export const editSupplier = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier ID must be provided." });
+        }
         const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {
@@ -101,6 +107,9 @@ export const editSupplier = async (req, res) => {
 export const changeSupplierStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Supplier ID must be provided." });
+        }
         const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
 
         if (!supplier) {

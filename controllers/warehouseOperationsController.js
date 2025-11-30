@@ -2,7 +2,6 @@ import Warehouse from "../models/warehousesSchema.js";
 import Product from "../models/productsSchema.js";
 import WarehouseTransaction from "../models/warehouseTransactionsSchema.js";
 
-// Helper to ensure capacity and update stock
 async function adjustStock({ warehouse, productId, lotSerial, quantity, quality, type }) {
     // Find existing stock item (by product + lot if provided)
     const existingIndex = warehouse.stock.findIndex(

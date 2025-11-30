@@ -28,8 +28,11 @@ export const getAllAgreements = async (req, res) => {
 export const getSingleAgreement = async (req, res) => {
     try {
         const { id } = req.params;
-        const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
+        if (!id) {
+            return res.status(400).json({ message: "Agreement ID must be provided." });
+        }
 
+        const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
         if (!agreement) {
             return res.status(404).json({ message: "Agreement not found." });
         }
@@ -82,6 +85,9 @@ export const createAgreement = async (req, res) => {
 export const editAgreement = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Agreement ID must be provided." });
+        }
         const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
 
         if (!agreement) {
@@ -118,6 +124,10 @@ export const editAgreement = async (req, res) => {
 export const changeAgreementStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Agreement ID must be provided." });
+        }
+
         const agreement = await Agreement.findOne({ _id: id, userId: req.user?._id });
 
         if (!agreement) {

@@ -27,6 +27,9 @@ export const getAllInventory = async (req, res) => {
 export const getSingleInventory = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Inventory ID must be provided." });
+        }
         const record = await Inventory.findOne({ _id: id, userId: req.user?._id });
 
         if (!record) {
@@ -75,6 +78,9 @@ export const createInventory = async (req, res) => {
 export const editInventory = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Inventory ID must be provided." });
+        }
         const record = await Inventory.findOne({ _id: id, userId: req.user?._id });
 
         if (!record) {
@@ -108,6 +114,9 @@ export const editInventory = async (req, res) => {
 export const changeInventoryStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Inventory ID must be provided." });
+        }
         const record = await Inventory.findOne({ _id: id, userId: req.user?._id });
 
         if (!record) {

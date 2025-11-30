@@ -27,6 +27,9 @@ export const getAllCustomers = async (req, res) => {
 export const getSingleCustomer = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Customer ID must be provided." });
+        }
         const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {
@@ -75,6 +78,9 @@ export const createCustomer = async (req, res) => {
 export const editCustomer = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Customer ID must be provided." });
+        }
         const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {
@@ -103,6 +109,9 @@ export const editCustomer = async (req, res) => {
 export const changeCustomerStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Customer ID must be provided." });
+        }
         const customer = await Customer.findOne({ _id: id, userId: req.user?._id });
 
         if (!customer) {

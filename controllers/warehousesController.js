@@ -27,6 +27,9 @@ export const getAllWarehouses = async (req, res) => {
 export const getSingleWarehouse = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Warehouse ID must be provided." });
+        }
         const warehouse = await Warehouse.findOne({ _id: id, userId: req.user?._id });
 
         if (!warehouse) {
@@ -73,6 +76,9 @@ export const createWarehouse = async (req, res) => {
 export const editWarehouse = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Warehouse ID must be provided." });
+        }
         const warehouse = await Warehouse.findOne({ _id: id, userId: req.user?._id });
 
         if (!warehouse) {
@@ -99,6 +105,9 @@ export const editWarehouse = async (req, res) => {
 export const changeWarehouseStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Warehouse ID must be provided." });
+        }
         const warehouse = await Warehouse.findOne({ _id: id, userId: req.user?._id });
 
         if (!warehouse) {

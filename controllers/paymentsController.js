@@ -25,6 +25,9 @@ export const getALLPayments = async (req, res) => {
 export const getSinglePayment = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Payment ID must be provided." });
+        }
         const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
@@ -77,6 +80,9 @@ export const createPayment = async (req, res) => {
 export const editPayment = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Payment ID must be provided." });
+        }
         const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
@@ -111,6 +117,9 @@ export const editPayment = async (req, res) => {
 export const changePaymentStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Payment ID must be provided." });
+        }
         const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {

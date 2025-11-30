@@ -25,6 +25,9 @@ export const getAllOrders = async (req, res) => {
 export const getSingleOrder = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Order ID must be provided." });
+        }
         const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {
@@ -77,6 +80,9 @@ export const createOrder = async (req, res) => {
 export const editOrder = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Order ID must be provided." });
+        }
         const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {
@@ -111,6 +117,9 @@ export const editOrder = async (req, res) => {
 export const changeOrderStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Order ID must be provided." });
+        }
         const order = await Order.findOne({ _id: id, userId: req.user?._id });
 
         if (!order) {

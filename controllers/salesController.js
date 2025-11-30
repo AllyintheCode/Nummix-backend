@@ -25,6 +25,9 @@ export const getAllSales = async (req, res) => {
 export const getSingleSale = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Sale ID must be provided." });
+        }
         const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
@@ -76,6 +79,9 @@ export const createSale = async (req, res) => {
 export const editSale = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Sale ID must be provided." });
+        }
         const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
@@ -109,6 +115,9 @@ export const editSale = async (req, res) => {
 export const changeSaleStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: "Sale ID must be provided." });
+        }
         const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
 
         if (!sale) {
