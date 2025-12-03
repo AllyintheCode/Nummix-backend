@@ -141,7 +141,6 @@ const assetSchema = new mongoose.Schema({
   },
   account: {
     type: String,
-    required: true,
     trim: true
   },
   location: {

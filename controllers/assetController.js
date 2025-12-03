@@ -5,8 +5,94 @@ import { PdfService } from '../services/pdfService.js';
 // 🏢 VƏSAİT ƏMƏLİYYATLARI
 
 // Yeni vəsait yarat (BUFFER İLƏ)
+// Asset sənəd məlumatlarını gətir (DOWNLOAD YOX, GET METADATA)
+export const getAssetDocument = async (req, res) => {
+  try {
+    console.log('🔍 GET ASSET DOCUMENT called');
+    console.log('👤 User ID:', req.params.userId);
+    console.log('🏢 Asset ID:', req.params.assetId);
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
+    }
+
+    const asset = user.assets.id(req.params.assetId);
+    if (!asset) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Vəsait tapılmadı" 
+      });
+    }
+
+    console.log('📄 Asset document exists:', !!asset.document);
+    
+    if (!asset.document) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Sənəd tapılmadı",
+        assetDetails: {
+          id: asset._id,
+          name: asset.name,
+          hasDocument: false
+        }
+      });
+    }
+
+    // ƏSAS DƏYİŞİKLİK: downloadUrl düzgün formatda
+    const documentInfo = {
+      originalName: asset.document.originalName,
+      mimeType: asset.document.mimeType,
+      fileSize: asset.document.fileSize,
+      uploadedAt: asset.document.uploadedAt,
+      // ✅ DÜZGÜN DOWNLOAD LINKİ
+      downloadUrl: `/api/${req.params.userId}/assets/${req.params.assetId}/download-document`,
+      // ✅ Əlavə olaraq: direkt fayl linki
+      directFileUrl: `/api/${req.params.userId}/assets/${req.params.assetId}/download-document?download=true`,
+      // ✅ Frontend-də asanlıq üçün:
+      downloadLink: `<a href="/api/${req.params.userId}/assets/${req.params.assetId}/download-document" download="${asset.document.originalName}">Yüklə</a>`
+    };
+
+    res.json({
+      success: true,
+      message: "Sənəd məlumatları uğurla gətirildi",
+      data: {
+        assetId: asset._id,
+        assetName: asset.name,
+        document: documentInfo,
+        // ✅ Əlavə məlumat
+        instructions: {
+          download: "Download linkinə klik edin və fayl avtomatik yüklənəcək",
+          directDownload: "Linki yeni tabda açmaq üçün sağ klik -> 'Yeni tabda aç'",
+          frontendUsage: "Frontend-də: <a href='...' download>Yüklə</a> tag-ı istifadə edin"
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ GET ASSET DOCUMENT Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message
+    });
+  }
+};
 export const createAsset = async (req, res) => {
   try {
+    console.log('🔍 CREATE ASSET DEBUG:');
+    console.log('📋 Request Body Keys:', Object.keys(req.body));
+    console.log('📋 Request Body Values:', req.body);
+    
+    // Hər bir sahəni ayrıca logla
+    console.log('📝 Checking account field:');
+    console.log('- account in req.body:', req.body.account);
+    console.log('- account type:', typeof req.body.account);
+    console.log('- account trimmed:', req.body.account?.trim());
+    console.log('- account after trim length:', req.body.account?.trim()?.length);
+    
     const {
       inventoryNumber,
       name,
@@ -20,57 +106,85 @@ export const createAsset = async (req, res) => {
       notes
     } = req.body;
 
-    const user = await User.findById(req.params.userId);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+    console.log('📝 Destructured account:', account);
+    
+    // Validation check
+    if (!account || account.trim() === '') {
+      console.log('❌ ERROR: Account is empty or missing');
+      return res.status(400).json({
+        success: false,
+        message: "Account sahəsi tələb olunur",
+        receivedBody: req.body,
+        missingFields: ['account']
+      });
     }
 
-    // İnventar nömrəsi unikallığını yoxla
-    const existingAsset = user.assets.find(asset => asset.inventoryNumber === inventoryNumber);
-    if (existingAsset) {
-      return res.status(400).json({ message: "Bu inventar nömrəsi artıq mövcuddur" });
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
     }
 
     const assetData = {
       inventoryNumber: inventoryNumber || `INV_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      category,
-      account,
-      location,
-      initialValue: parseFloat(initialValue),
-      currentValue: parseFloat(currentValue),
-      purchaseDate: new Date(purchaseDate),
+      name: name?.trim(),
+      category: category?.trim(),
+      account: account?.trim(), // ⬅️ BU MÜTLƏQ DOLU OLMALIDIR
+      location: location?.trim(),
+      initialValue: parseFloat(initialValue) || 0,
+      currentValue: parseFloat(currentValue) || 0,
+      purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
       serviceLife: parseInt(serviceLife) || 1,
-      notes,
+      notes: notes?.trim(),
       status: "Aktiv",
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
-    // ✅ YENİ: Əgər fayl yüklənibsə, BUFFER məlumatlarını əlavə et
+    console.log('✅ Asset Data to save:', assetData);
+    
+    // Əgər fayl yüklənibsə
     if (req.file) {
+      console.log('📁 File detected:', req.file.originalname);
       assetData.document = {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
-        // ✅ BUFFER-I Base64-ə çevirib saxlayırıq
         bufferData: req.file.buffer.toString('base64'),
         uploadedAt: new Date()
       };
     }
 
+    console.log('💾 Saving to database...');
     user.assets.push(assetData);
     await user.save();
-
+    
+    console.log('✅ Asset saved successfully');
+    
     const newAsset = user.assets[user.assets.length - 1];
+    
+    // Buffer data-sını client-ə göndərmirik
+    const assetResponse = newAsset.toObject();
+    if (assetResponse.document && assetResponse.document.bufferData) {
+      delete assetResponse.document.bufferData;
+    }
 
     res.status(201).json({
       success: true,
-      data: newAsset,
+      data: assetResponse,
       message: "Vəsait uğurla əlavə edildi"
     });
+    
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('❌ CREATE ASSET Error:', error.message);
+    console.error('❌ Error Stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: error.message,
+      errorType: error.name
+    });
   }
 };
 
@@ -152,29 +266,117 @@ export const deleteAssetDocument = async (req, res) => {
 // Asset sənədini yüklə (BUFFER İLƏ)
 export const downloadAssetDocument = async (req, res) => {
   try {
+    console.log('⬇️ DOWNLOAD ASSET DOCUMENT (Universal Version)');
+    
     const user = await User.findById(req.params.userId);
     if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
     }
 
     const asset = user.assets.id(req.params.assetId);
     if (!asset || !asset.document || !asset.document.bufferData) {
-      return res.status(404).json({ message: "Sənəd tapılmadı" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Sənəd tapılmadı" 
+      });
     }
 
-    // ✅ YENİ: Buffer data-sını Base64-dən Buffer-a çevirib göndəririk
+    // Base64-dən Buffer-a çevir
     const fileBuffer = Buffer.from(asset.document.bufferData, 'base64');
+    const fileName = asset.document.originalName;
     
-    // Content-Type təyin et
-    res.setHeader('Content-Type', asset.document.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${asset.document.originalName}"`);
-    res.setHeader('Content-Length', asset.document.fileSize);
+    // ✅ BÜTÜN BRAUZERLƏR ÜÇÜN UYĞUN FİLENAME
+    let encodedFileName;
     
-    // Buffer-ı göndər
-    res.send(fileBuffer);
+    // Türkə və xüsusi simvollar üçün
+    if (/[\u0080-\uFFFF]/.test(fileName) || /[^\x00-\x7F]/.test(fileName)) {
+      // Unicode simvollar varsa
+      encodedFileName = Buffer.from(fileName).toString('latin1');
+    } else {
+      // Normal ASCII simvollar
+      encodedFileName = fileName;
+    }
+    
+    // ✅ HTTP HEADER-LARI
+    res.writeHead(200, {
+      'Content-Type': asset.document.mimeType,
+      'Content-Disposition': `attachment; filename="${encodedFileName}"`,
+      'Content-Length': asset.document.fileSize,
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Content-Type-Options': 'nosniff',
+      'Access-Control-Expose-Headers': 'Content-Disposition'
+    });
+    
+    // ✅ BÜTÜN BRAUZERLƏR ÜÇÜN TEST EDİLMİŞ FORMAT
+    // Chrome, Firefox, Safari, Edge üçün
+    const userAgent = req.headers['user-agent'] || '';
+    
+    if (userAgent.includes('Chrome') || userAgent.includes('Firefox')) {
+      // Modern brauzerlər üçün
+      res.setHeader('Content-Disposition', 
+        `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`
+      );
+    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+      // Safari üçün (fərqli encoding)
+      res.setHeader('Content-Disposition', 
+        `attachment; filename="${encodeURIComponent(fileName)}"`
+      );
+    } else {
+      // Digər brauzerlər üçün
+      res.setHeader('Content-Disposition', 
+        `attachment; filename="${encodedFileName}"`
+      );
+    }
+    
+    console.log('📤 Download started:', {
+      fileName: fileName,
+      encodedName: encodedFileName,
+      size: asset.document.fileSize,
+      type: asset.document.mimeType,
+      userAgent: userAgent.substring(0, 50)
+    });
+
+    // Buffer-ı hissə-hissə göndər (böyük fayllar üçün)
+    const chunkSize = 64 * 1024; // 64KB chunks
+    let offset = 0;
+    
+    const sendChunk = () => {
+      if (offset >= fileBuffer.length) {
+        console.log('✅ File download completed');
+        res.end();
+        return;
+      }
+      
+      const chunk = fileBuffer.slice(offset, offset + chunkSize);
+      offset += chunkSize;
+      
+      if (res.write(chunk)) {
+        process.nextTick(sendChunk);
+      } else {
+        res.once('drain', sendChunk);
+      }
+    };
+    
+    sendChunk();
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('❌ DOWNLOAD ERROR:', error);
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        success: false,
+        message: error.message,
+        details: {
+          userId: req.params.userId,
+          assetId: req.params.assetId
+        }
+      });
+    }
   }
 };
 

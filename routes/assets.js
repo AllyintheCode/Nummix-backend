@@ -7,6 +7,7 @@ import {
   createAsset,
   updateAsset,
   deleteAsset,
+  getAssetDocument,
   
   // Kateqoriya əməliyyatları
   getCategories,
@@ -374,7 +375,54 @@ router.get("/:userId/assets/:assetId", getAssetById);
  *         $ref: '#/components/responses/NotFound'
  */
 router.post("/:userId/assets", uploadDocuments.single('document'), createAsset);
+// routes/assets.js faylına əlavə edin:
 
+/**
+ * @swagger
+ * /api/{userId}/assets/{assetId}/document:
+ *   get:
+ *     summary: Vəsait sənəd məlumatlarını gətir
+ *     tags: [Documents]
+ *     description: Upload olunmuş sənədin metadata məlumatlarını qaytarır
+ *     parameters:
+ *       - $ref: '#/components/parameters/userIdParam'
+ *       - $ref: '#/components/parameters/assetIdParam'
+ *     responses:
+ *       200:
+ *         description: Sənəd məlumatları uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     assetId:
+ *                       type: string
+ *                     assetName:
+ *                       type: string
+ *                     document:
+ *                       type: object
+ *                       properties:
+ *                         originalName:
+ *                           type: string
+ *                         mimeType:
+ *                           type: string
+ *                         fileSize:
+ *                           type: number
+ *                         uploadedAt:
+ *                           type: string
+ *                           format: date-time
+ *                         downloadUrl:
+ *                           type: string
+ *       404:
+ *         description: Sənəd tapılmadı
+ */
+router.get("/:userId/assets/:assetId/document", getAssetDocument);
 /**
  * @swagger
  * /api/{userId}/assets/{assetId}:
