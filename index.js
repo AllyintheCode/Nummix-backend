@@ -15,6 +15,11 @@ import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
 
+import swaggerUi from "swagger-ui-express";
+import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
+import { fileURLToPath } from "url";
+
 dotenv.config();
 const app = express();
 
@@ -32,10 +37,37 @@ const limiter = rateLimit({
 
 app.use("/api/users/register", limiter);
 
-// test route
 app.get("/", (req, res) => {
     res.send("Nummix backend işləyir 🚀");
 });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const options = {
+    definition: {
+        openapi: "3.0.0",
+        info: {
+            title: "My API",
+            version: "1.0.0",
+        },
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                },
+            },
+        },
+        security: [{ bearerAuth: [] }],
+    },
+    apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
+};
+
+const swaggerSpec = swaggerJsdoc(options);
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 connectDB();
 app.use("/api/users", userRoutes);
