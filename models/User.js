@@ -219,7 +219,8 @@ const assetSchema = new mongoose.Schema({
   }
 });
 // Excel və PDF report schema-larında da buffer əlavə edə bilərsiniz (seçimlik):
-const excelReportSchema = new mongoose.Schema({
+
+ const excelReportSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
@@ -229,6 +230,7 @@ const excelReportSchema = new mongoose.Schema({
     type: String,
     default: "Vəsait siyahısını Excel kimi yüklə"
   },
+
   reportType: {
     type: String,
     enum: ["assets", "category", "department"],
@@ -318,6 +320,8 @@ const pdfReportSchema = new mongoose.Schema({
   },
   // ... qalan sahələr eyni qalır
 });
+
+
 
 const categoryReportSchema = new mongoose.Schema({
   title: {

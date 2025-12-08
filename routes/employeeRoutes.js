@@ -1,13 +1,15 @@
-// routes/employees.js
+// routes/employeeRoutes.js
 import express from "express";
-import multer from "multer";
 import {
   createEmployee,
   getAllEmployees,
   getEmployeeById,
   updateEmployee,
   deleteEmployee,
-  getEmployeeImage,
+  updateEmployeeType,
+  getEmployeePayments,
+  addEmployeePayment,
+  calculateEmployeeTaxes,
   updateSalary,
   getNotifications,
   getNotificationById,
@@ -17,135 +19,141 @@ import {
   clearNotifications,
   getNotificationsByStatus,
   addLeave,
+  downloadExcelEmployees,
   updateLeave,
   deleteLeave,
   getEmployeeLeaves,
+  getEmployeeLeaveById,
   addAttendance,
   updateAttendance,
   deleteAttendance,
   getEmployeeAttendances,
+  getAttendanceById,
   getEmployeesByCompany,
   getEmployeesByStatus,
-  getEmployeeLeaveById,
-  getAttendanceById,
-  updateEmployeeType,
-  getEmployeePayments,
-  addEmployeePayment,
-  updateEmployeeTaxData,
-  calculateEmployeeTaxes,
+  getEmployeeImage,
+  getSalaryReport,
+  bulkUpdateSalaries,
   downloadEmployeeFile,
-  viewEmployeeFile
+  viewEmployeeFile,
+  updateEmployeeTaxData,
+  uploadEmployeeFile,
+  deleteEmployeeFile,
+  upload
 } from "../controllers/employeeController.js";
 
 const router = express.Router();
 
-// Multer configuration for file upload
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
-});
-
 /**
  * @swagger
  * tags:
- *   name: Employees
- *   description: İşçi idarəetmə əməliyyatları
- *   name: Notifications
- *   description: Bildiriş idarəetmə əməliyyatları
- *   name: Leaves
- *   description: Məzuniyyət idarəetmə əməliyyatları
- *   name: Attendance
- *   description: İş vaxtı qeydləri
- *   name: Payments
- *   description: Ödəniş və vergi əməliyyatları
+ *   - name: Employees
+ *     description: İşçi idarəetmə əməliyyatları
+ *   - name: Employee Files
+ *     description: İşçi fayl idarəetməsi
+ *   - name: Salary & Taxes
+ *     description: Maaş və vergi əməliyyatları
+ *   - name: Payments
+ *     description: Ödəniş əməliyyatları
+ *   - name: Notifications
+ *     description: Bildiriş idarəetməsi
+ *   - name: Leaves
+ *     description: Məzuniyyət idarəetməsi
+ *   - name: Attendance
+ *     description: İş giriş-çıxışı
+ *   - name: Reports
+ *     description: Hesabat və export əməliyyatları
  */
 
 /**
  * @swagger
  * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ * 
  *   schemas:
  *     Employee:
  *       type: object
  *       required:
- *         - name
- *         - surname
+ *         - firstName
+ *         - lastName
  *         - email
  *         - position
- *         - department
- *         - salary
+ *         - tin
+ *         - idSerialNumber
+ *         - phone
+ *         - companyId
+ *         - hireDate
  *       properties:
  *         _id:
  *           type: string
- *           description: İşçinin avtomatik yaranan ID-si
- *         name:
+ *           example: "507f1f77bcf86cd799439011"
+ *         firstName:
  *           type: string
- *           description: Ad
  *           example: "Əli"
- *         surname:
+ *         lastName:
  *           type: string
- *           description: Soyad
- *           example: "Məmmədov"
+ *           example: "Hüseynov"
  *         email:
  *           type: string
  *           format: email
- *           description: Email ünvanı
- *           example: "eli.mammadov@example.com"
- *         phone:
- *           type: string
- *           description: Telefon nömrəsi
- *           example: "+994501234567"
+ *           example: "ali.huseynov@example.com"
  *         position:
  *           type: string
- *           description: Vəzifə
- *           example: "Proqramçı"
- *         department:
+ *           example: "Backend Developer"
+ *         tin:
  *           type: string
- *           description: Şöbə
- *           example: "IT"
- *         salary:
- *           type: number
- *           description: Aylıq maaş
- *           example: 2500
+ *           example: "1234567890"
+ *         idSerialNumber:
+ *           type: string
+ *           example: "AZE1234567"
+ *         phone:
+ *           type: string
+ *           example: "+994501234567"
+ *         companyId:
+ *           type: string
+ *           example: "507f1f77bcf86cd799439022"
  *         employeeType:
  *           type: string
- *           enum: [full-time, part-time, contract, temporary]
- *           description: İşçi növü
- *           default: "full-time"
+ *           enum: [state, private]
+ *           default: "private"
+ *           example: "private"
+ *         gross:
+ *           type: number
+ *           format: double
+ *           example: 2500.00
+ *         tax:
+ *           type: number
+ *           format: double
+ *           example: 150.00
+ *         social_pay:
+ *           type: number
+ *           format: double
+ *           example: 200.00
+ *         Net_salary:
+ *           type: number
+ *           format: double
+ *           example: 2150.00
+ *         salary_status:
+ *           type: string
+ *           enum: [pending, paid, cancelled]
+ *           default: "pending"
+ *           example: "pending"
+ *         Department:
+ *           type: string
+ *           example: "IT Department"
+ *         status:
+ *           type: string
+ *           enum: [active, on_leave, terminated]
+ *           default: "active"
+ *           example: "active"
  *         hireDate:
  *           type: string
  *           format: date
- *           description: İşə qəbul tarixi
  *           example: "2024-01-15"
- *         status:
- *           type: string
- *           enum: [active, inactive, suspended, terminated]
- *           description: Status
- *           default: "active"
- *         address:
- *           type: string
- *           description: Ünvan
- *         birthDate:
- *           type: string
- *           format: date
- *           description: Doğum tarixi
- *         image:
- *           type: string
- *           description: Şəkil URL-i
- *         documents:
- *           type: array
- *           items:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               url:
- *                 type: string
- *               uploadedAt:
- *                 type: string
- *                 format: date-time
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -153,130 +161,170 @@ const upload = multer({
  *           type: string
  *           format: date-time
  * 
- *     Notification:
+ *     EmployeeInput:
  *       type: object
  *       required:
- *         - title
- *         - type
+ *         - firstName
+ *         - lastName
+ *         - email
+ *         - position
+ *         - tin
+ *         - idSerialNumber
+ *         - phone
+ *         - companyId
+ *         - hireDate
  *       properties:
- *         _id:
+ *         firstName:
  *           type: string
- *         title:
+ *           example: "Əli"
+ *         lastName:
  *           type: string
- *           example: "Yeni maaş tənzimləməsi"
- *         message:
+ *           example: "Hüseynov"
+ *         email:
  *           type: string
- *           example: "Maaşınız 10% artırıldı"
- *         type:
+ *           example: "ali.huseynov@example.com"
+ *         position:
  *           type: string
- *           enum: [info, warning, success, error]
- *           example: "success"
- *         status:
+ *           example: "Backend Developer"
+ *         tin:
  *           type: string
- *           enum: [unread, read]
- *           default: "unread"
- *         createdAt:
+ *           example: "1234567890"
+ *         idSerialNumber:
  *           type: string
- *           format: date-time
- * 
- *     Leave:
- *       type: object
- *       required:
- *         - startDate
- *         - endDate
- *         - type
- *       properties:
- *         _id:
+ *           example: "AZE1234567"
+ *         phone:
  *           type: string
- *         startDate:
+ *           example: "+994501234567"
+ *         companyId:
  *           type: string
- *           format: date
- *           example: "2024-02-01"
- *         endDate:
+ *           example: "507f1f77bcf86cd799439022"
+ *         employeeType:
  *           type: string
- *           format: date
- *           example: "2024-02-05"
- *         type:
- *           type: string
- *           enum: [annual, sick, maternity, unpaid, other]
- *           example: "annual"
- *         reason:
- *           type: string
- *           example: "Ailəvi məzuniyyət"
- *         status:
- *           type: string
- *           enum: [pending, approved, rejected]
- *           default: "pending"
- *         createdAt:
- *           type: string
- *           format: date-time
- * 
- *     Attendance:
- *       type: object
- *       required:
- *         - date
- *         - checkIn
- *       properties:
- *         _id:
- *           type: string
- *         date:
- *           type: string
- *           format: date
- *           example: "2024-01-20"
- *         checkIn:
- *           type: string
- *           format: time
- *           example: "09:00"
- *         checkOut:
- *           type: string
- *           format: time
- *           example: "18:00"
- *         hoursWorked:
+ *           enum: [state, private]
+ *           example: "private"
+ *         gross:
  *           type: number
- *           example: 8
- *         status:
+ *           example: 2500.00
+ *         Department:
  *           type: string
- *           enum: [present, absent, late, half-day]
- *           example: "present"
- *         notes:
+ *           example: "IT Department"
+ *         hireDate:
  *           type: string
+ *           format: date
+ *           example: "2024-01-15"
  * 
  *     Payment:
  *       type: object
  *       required:
+ *         - paymentType
  *         - amount
  *         - paymentDate
- *         - type
+ *         - forMonth
  *       properties:
- *         _id:
- *           type: string
- *         amount:
- *           type: number
- *           example: 2500
- *         paymentDate:
- *           type: string
- *           format: date
- *           example: "2024-01-31"
- *         type:
+ *         paymentType:
  *           type: string
  *           enum: [salary, bonus, advance, other]
  *           example: "salary"
- *         description:
+ *         amount:
+ *           type: number
+ *           example: 2150.00
+ *         paymentDate:
  *           type: string
- *           example: "Yanvar ayı maaşı"
+ *           format: date-time
+ *         forMonth:
+ *           type: string
+ *           format: date
  *         status:
  *           type: string
  *           enum: [pending, completed, cancelled]
- *           default: "completed"
+ *           example: "completed"
+ *         description:
+ *           type: string
+ *           example: "Yanvar ayı maaşı"
+ * 
+ *     Leave:
+ *       type: object
+ *       properties:
+ *         leaveType:
+ *           type: string
+ *           enum: [annual, sick, unpaid, other]
+ *           example: "annual"
+ *         startDate:
+ *           type: string
+ *           format: date
+ *           example: "2024-06-01"
+ *         endDate:
+ *           type: string
+ *           format: date
+ *           example: "2024-06-10"
+ *         totalDaysRequested:
+ *           type: number
+ *           example: 10
+ *         status:
+ *           type: string
+ *           enum: [approved, pending, rejected]
+ *           example: "pending"
+ *         reason:
+ *           type: string
+ *           example: "İllik məzuniyyət"
+ * 
+ *     Attendance:
+ *       type: object
+ *       properties:
+ *         date:
+ *           type: string
+ *           format: date
+ *           example: "2024-05-15"
+ *         checkInTime:
+ *           type: string
+ *           format: date-time
+ *         checkOutTime:
+ *           type: string
+ *           format: date-time
+ *         status:
+ *           type: string
+ *           enum: [present, absent, on_leave, remote]
+ *           example: "present"
+ *         isLate:
+ *           type: boolean
+ *           example: false
+ * 
+ *     Notification:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *           example: "Yeni maaş hesablanmışdır"
+ *         type:
+ *           type: string
+ *           enum: [info, warning, success, error]
+ *           example: "info"
+ *         isRead:
+ *           type: boolean
+ *           example: false
+ *         createdAt:
+ *           type: string
+ *           format: date-time
  * 
  *   parameters:
- *     employeeIdParam:
+ *     idParam:
  *       in: path
  *       name: id
  *       required: true
  *       schema:
  *         type: string
  *       description: İşçi ID-si
+ *       example: "507f1f77bcf86cd799439011"
+ * 
+ *     employeeIdParam:
+ *       in: path
+ *       name: employeeId
+ *       required: true
+ *       schema:
+ *         type: string
+ *       description: İşçi ID-si
+ *       example: "507f1f77bcf86cd799439011"
+ * 
  *     companyIdParam:
  *       in: path
  *       name: companyId
@@ -284,6 +332,8 @@ const upload = multer({
  *       schema:
  *         type: string
  *       description: Şirkət ID-si
+ *       example: "507f1f77bcf86cd799439022"
+ * 
  *     notificationIdParam:
  *       in: path
  *       name: notificationId
@@ -291,6 +341,7 @@ const upload = multer({
  *       schema:
  *         type: string
  *       description: Bildiriş ID-si
+ * 
  *     leaveIdParam:
  *       in: path
  *       name: leaveId
@@ -298,39 +349,295 @@ const upload = multer({
  *       schema:
  *         type: string
  *       description: Məzuniyyət ID-si
+ * 
  *     attendanceIdParam:
  *       in: path
  *       name: attendanceId
  *       required: true
  *       schema:
  *         type: string
- *       description: İş vaxtı ID-si
+ *       description: İş girişi ID-si
+ * 
+ *   responses:
+ *     Success:
+ *       description: Əməliyyat uğurla tamamlandı
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: true
+ *               message:
+ *                 type: string
+ *                 example: "Əməliyyat uğurla tamamlandı"
+ * 
+ *     NotFound:
+ *       description: Məlumat tapılmadı
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: false
+ *               message:
+ *                 type: string
+ *                 example: "Məlumat tapılmadı"
+ * 
+ *     ValidationError:
+ *       description: Validasiya xətası
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: false
+ *               message:
+ *                 type: string
+ *                 example: "Validasiya xətası"
+ * 
+ *     ServerError:
+ *       description: Server xətası
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               success:
+ *                 type: boolean
+ *                 example: false
+ *               message:
+ *                 type: string
+ *                 example: "Server xətası baş verdi"
  */
 
-// 👥 EMPLOYEE CRUD ROUTES
+// ===================== FAYL ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/employees/{id}/upload:
+ *   post:
+ *     summary: İşçiyə fayl yüklə
+ *     tags: [Employee Files]
+ *     description: İşçiyə sənəd yükləmək üçün
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: PDF, JPEG, PNG, DOC, DOCX faylları (max 10MB)
+ *     responses:
+ *       200:
+ *         description: Fayl uğurla yükləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Fayl uğurla yükləndi"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     filename:
+ *                       type: string
+ *                     originalName:
+ *                       type: string
+ *                     contentType:
+ *                       type: string
+ *                     fileSize:
+ *                       type: number
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.post(
+  '/:id/upload',
+  upload.single('file'),
+  uploadEmployeeFile
+);
+
+/**
+ * @swagger
+ * /api/employees/{id}/file:
+ *   get:
+ *     summary: İşçi faylını göstər
+ *     tags: [Employee Files]
+ *     description: İşçinin yüklədiyi faylı göstərir (browser-də açır)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Fayl uğurla göstərildi
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get('/:id/file', viewEmployeeFile);
+
+/**
+ * @swagger
+ * /api/employees/{id}/file:
+ *   delete:
+ *     summary: İşçi faylını sil
+ *     tags: [Employee Files]
+ *     description: İşçinin yüklədiyi faylı silir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         $ref: '#/components/responses/Success'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.delete('/:id/file', deleteEmployeeFile);
+
+// ===================== ƏSAS İŞÇİ ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/employees/company/{companyid}/download-excel:
+ *   get:
+ *     summary: Şirkət işçilərini Excel formatında endir
+ *     tags: [Reports]
+ *     description: Şirkətin bütün işçilərini Excel faylı kimi endirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: companyid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Şirkət ID-si
+ *     responses:
+ *       200:
+ *         description: Excel faylı uğurla yaradıldı
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/company/:companyid/download-excel", downloadExcelEmployees);
+
+/**
+ * @swagger
+ * /api/employees:
+ *   post:
+ *     summary: Yeni işçi yarat
+ *     tags: [Employees]
+ *     description: Yeni işçi yaradır və vergiləri avtomatik hesablayır
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EmployeeInput'
+ *     responses:
+ *       201:
+ *         description: İşçi uğurla yaradıldı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Employee'
+ *                 message:
+ *                   type: string
+ *                   example: "İşçi yaradıldı. Vergilər avtomatik hesablandı."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.post("/", createEmployee);
 
 /**
  * @swagger
  * /api/employees:
  *   get:
- *     summary: Bütün işçiləri gətir
+ *     summary: Bütün işçiləri getir
  *     tags: [Employees]
+ *     description: Filtirlənmiş işçilər siyahısını gətirir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
+ *       - in: query
+ *         name: companyId
+ *         schema:
+ *           type: string
+ *         description: Şirkət ID-si üzrə filtr
+ *       - in: query
+ *         name: employeeType
+ *         schema:
+ *           type: string
+ *           enum: [state, private]
+ *         description: İşçi növü üzrə filtr
  *       - in: query
  *         name: department
  *         schema:
  *           type: string
- *         description: Şöbə üzrə filter
+ *         description: Departament üzrə filtr
  *       - in: query
- *         name: position
+ *         name: salary_status
  *         schema:
  *           type: string
- *         description: Vəzifə üzrə filter
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *         description: Status üzrə filter
+ *           enum: [pending, paid, cancelled]
+ *         description: Maaş statusu üzrə filtr
  *     responses:
  *       200:
  *         description: İşçilər uğurla gətirildi
@@ -348,142 +655,25 @@ const upload = multer({
  *                     $ref: '#/components/schemas/Employee'
  *                 count:
  *                   type: number
- *                   example: 25
+ *                   example: 10
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/", getAllEmployees);
 
 /**
  * @swagger
- * /api/employees/company/{companyId}:
- *   get:
- *     summary: Şirkətə aid işçiləri gətir
- *     tags: [Employees]
- *     parameters:
- *       - $ref: '#/components/parameters/companyIdParam'
- *     responses:
- *       200:
- *         description: İşçilər uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Employee'
- */
-router.get("/company/:companyId", getEmployeesByCompany);
-
-/**
- * @swagger
- * /api/employees/status:
- *   get:
- *     summary: Status üzrə işçiləri gətir
- *     tags: [Employees]
- *     parameters:
- *       - in: query
- *         name: status
- *         required: true
- *         schema:
- *           type: string
- *           enum: [active, inactive, suspended, terminated]
- *         description: İşçi statusu
- *     responses:
- *       200:
- *         description: İşçilər uğurla gətirildi
- */
-router.get("/status", getEmployeesByStatus);
-
-/**
- * @swagger
- * /api/employees:
- *   post:
- *     summary: Yeni işçi yarat
- *     tags: [Employees]
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 required: true
- *                 example: "Əli"
- *               surname:
- *                 type: string
- *                 required: true
- *                 example: "Məmmədov"
- *               email:
- *                 type: string
- *                 format: email
- *                 required: true
- *                 example: "eli.mammadov@example.com"
- *               phone:
- *                 type: string
- *                 example: "+994501234567"
- *               position:
- *                 type: string
- *                 required: true
- *                 example: "Proqramçı"
- *               department:
- *                 type: string
- *                 required: true
- *                 example: "IT"
- *               salary:
- *                 type: number
- *                 required: true
- *                 example: 2500
- *               employeeType:
- *                 type: string
- *                 enum: [full-time, part-time, contract, temporary]
- *                 example: "full-time"
- *               hireDate:
- *                 type: string
- *                 format: date
- *                 example: "2024-01-15"
- *               address:
- *                 type: string
- *                 example: "Bakı, Azerbaijan"
- *               birthDate:
- *                 type: string
- *                 format: date
- *                 example: "1990-05-15"
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: İşçinin şəkli və ya sənədi
- *     responses:
- *       201:
- *         description: İşçi uğurla yaradıldı
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Employee'
- *                 message:
- *                   type: string
- *                   example: "İşçi uğurla əlavə edildi"
- */
-router.post("/", upload.single("file"), createEmployee);
-
-/**
- * @swagger
  * /api/employees/{id}:
  *   get:
- *     summary: ID ilə işçini gətir
+ *     summary: ID ilə işçi getir
  *     tags: [Employees]
+ *     description: Müəyyən edilmiş ID-yə sahib işçini gətirir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
  *         description: İşçi uğurla gətirildi
@@ -497,8 +687,12 @@ router.post("/", upload.single("file"), createEmployee);
  *                   example: true
  *                 data:
  *                   $ref: '#/components/schemas/Employee'
+ *       401:
+ *         description: Yetkisiz giriş
  *       404:
- *         description: İşçi tapılmadı
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:id", getEmployeeById);
 
@@ -508,44 +702,17 @@ router.get("/:id", getEmployeeById);
  *   put:
  *     summary: İşçi məlumatlarını yenilə
  *     tags: [Employees]
+ *     description: İşçi məlumatlarını yeniləyir və vergiləri avtomatik hesablayır
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Əli"
- *               surname:
- *                 type: string
- *                 example: "Məmmədov"
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "eli.mammadov@example.com"
- *               phone:
- *                 type: string
- *                 example: "+994501234567"
- *               position:
- *                 type: string
- *                 example: "Baş Proqramçı"
- *               department:
- *                 type: string
- *                 example: "IT"
- *               salary:
- *                 type: number
- *                 example: 3000
- *               status:
- *                 type: string
- *                 enum: [active, inactive, suspended, terminated]
- *                 example: "active"
- *               file:
- *                 type: string
- *                 format: binary
+ *             $ref: '#/components/schemas/EmployeeInput'
  *     responses:
  *       200:
  *         description: İşçi uğurla yeniləndi
@@ -561,9 +728,17 @@ router.get("/:id", getEmployeeById);
  *                   $ref: '#/components/schemas/Employee'
  *                 message:
  *                   type: string
- *                   example: "İşçi məlumatları uğurla yeniləndi"
+ *                   example: "İşçi yeniləndi. Vergilər avtomatik hesablandı."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
-router.put("/:id", upload.single("file"), updateEmployee);
+router.put("/:id", updateEmployee);
 
 /**
  * @swagger
@@ -571,145 +746,52 @@ router.put("/:id", upload.single("file"), updateEmployee);
  *   delete:
  *     summary: İşçini sil
  *     tags: [Employees]
+ *     description: İşçini sistemdən silir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: İşçi uğurla silindi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "İşçi uğurla silindi"
+ *         $ref: '#/components/responses/Success'
+ *       401:
+ *         description: Yetkisiz giriş
  *       404:
- *         description: İşçi tapılmadı
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.delete("/:id", deleteEmployee);
 
-// 🖼️ IMAGE ROUTES
-
-/**
- * @swagger
- * /api/employees/{id}/image:
- *   get:
- *     summary: İşçi şəklini gətir
- *     tags: [Employees]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *     responses:
- *       200:
- *         description: Şəkil uğurla gətirildi
- *         content:
- *           image/*:
- *             schema:
- *               type: string
- *               format: binary
- *       404:
- *         description: Şəkil tapılmadı
- */
-router.get("/:id/image", getEmployeeImage);
-
-// 💰 SALARY & TAX ROUTES
-
-/**
- * @swagger
- * /api/employees/{id}/salary:
- *   put:
- *     summary: İşçinin maaşını yenilə
- *     tags: [Employees]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               salary:
- *                 type: number
- *                 required: true
- *                 example: 3000
- *               effectiveDate:
- *                 type: string
- *                 format: date
- *                 example: "2024-02-01"
- *               reason:
- *                 type: string
- *                 example: "Təşəkkür bonusu"
- *     responses:
- *       200:
- *         description: Maaş uğurla yeniləndi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Maaş uğurla yeniləndi"
- *                 data:
- *                   $ref: '#/components/schemas/Employee'
- */
-router.put("/:id/salary", updateSalary);
+// ===================== MAAŞ VƏ VERGİ ƏMƏLİYYATLARI =====================
 
 /**
  * @swagger
  * /api/employees/{id}/employee-type:
  *   put:
  *     summary: İşçi növünü yenilə
- *     tags: [Employees]
+ *     tags: [Salary & Taxes]
+ *     description: İşçi növünü (dövlət/özəl) yeniləyir və vergiləri avtomatik hesablayır
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - employeeType
  *             properties:
  *               employeeType:
  *                 type: string
- *                 required: true
- *                 enum: [full-time, part-time, contract, temporary]
- *                 example: "full-time"
+ *                 enum: [state, private]
+ *                 example: "private"
  *     responses:
  *       200:
  *         description: İşçi növü uğurla yeniləndi
- */
-router.put("/:id/employee-type", updateEmployeeType);
-
-/**
- * @swagger
- * /api/employees/{id}/payments:
- *   get:
- *     summary: İşçi ödənişlərini gətir
- *     tags: [Payments]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - in: query
- *         name: month
- *         schema:
- *           type: string
- *           format: date
- *         description: Ay üzrə filter (YYYY-MM)
- *       - in: query
- *         name: year
- *         schema:
- *           type: string
- *         description: İl üzrə filter
- *     responses:
- *       200:
- *         description: Ödənişlər uğurla gətirildi
  *         content:
  *           application/json:
  *             schema:
@@ -717,21 +799,34 @@ router.put("/:id/employee-type", updateEmployeeType);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Payment'
+ *                   $ref: '#/components/schemas/Employee'
+ *                 message:
+ *                   type: string
+ *                   example: "İşçi növü və vergilər yeniləndi"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
-router.get("/:id/payments", getEmployeePayments);
+router.put("/:id/employee-type", updateEmployeeType);
 
 /**
  * @swagger
- * /api/employees/{id}/payments:
- *   post:
- *     summary: İşçi üçün ödəniş əlavə et
- *     tags: [Payments]
+ * /api/employees/{id}/salary:
+ *   put:
+ *     summary: Maaş məlumatlarını yenilə
+ *     tags: [Salary & Taxes]
+ *     description: İşçinin maaş məlumatlarını yeniləyir və vergiləri avtomatik hesablayır
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
  *       required: true
  *       content:
@@ -739,37 +834,56 @@ router.get("/:id/payments", getEmployeePayments);
  *           schema:
  *             type: object
  *             properties:
- *               amount:
+ *               gross:
  *                 type: number
- *                 required: true
+ *                 minimum: 400
  *                 example: 2500
- *               paymentDate:
+ *               employeeType:
  *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-01-31"
- *               type:
+ *                 enum: [state, private]
+ *                 example: "private"
+ *               salary_status:
  *                 type: string
- *                 required: true
- *                 enum: [salary, bonus, advance, other]
- *                 example: "salary"
- *               description:
- *                 type: string
- *                 example: "Yanvar ayı maaşı"
+ *                 enum: [pending, paid, cancelled]
+ *                 example: "pending"
  *     responses:
- *       201:
- *         description: Ödəniş uğurla əlavə edildi
+ *       200:
+ *         description: Maaş məlumatları uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Employee'
+ *                 message:
+ *                   type: string
+ *                   example: "Maaş məlumatları yeniləndi. Vergilər avtomatik hesablandı."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
-router.post("/:id/payments", addEmployeePayment);
+router.put("/:id/salary", updateSalary);
 
 /**
  * @swagger
  * /api/employees/{id}/tax-data:
  *   put:
- *     summary: İşçinin vergi məlumatlarını yenilə
- *     tags: [Payments]
+ *     summary: Vergi məlumatlarını yenilə
+ *     tags: [Salary & Taxes]
+ *     description: İşçinin vergi məlumatlarını yeniləyir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
  *       required: true
  *       content:
@@ -777,48 +891,67 @@ router.post("/:id/payments", addEmployeePayment);
  *           schema:
  *             type: object
  *             properties:
- *               taxId:
- *                 type: string
- *                 example: "1234567890"
- *               socialSecurityNumber:
- *                 type: string
- *                 example: "12345678901"
- *               taxRate:
+ *               gross:
  *                 type: number
- *                 example: 14
- *               exemptions:
- *                 type: number
- *                 example: 1
+ *                 minimum: 400
+ *                 example: 2500
+ *               employeeType:
+ *                 type: string
+ *                 enum: [state, private]
+ *                 example: "private"
  *     responses:
  *       200:
  *         description: Vergi məlumatları uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Employee'
+ *                 message:
+ *                   type: string
+ *                   example: "Vergi məlumatları yeniləndi"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.put("/:id/tax-data", updateEmployeeTaxData);
 
 /**
  * @swagger
- * /api/employees/{id}/calculate-taxes:
+ * /api/employees/calculate-taxes:
  *   post:
- *     summary: İşçi üçün vergiləri hesabla
- *     tags: [Payments]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *     summary: Vergiləri hesabla (demo üçün)
+ *     tags: [Salary & Taxes]
+ *     description: Verilən məlumatlara əsasən vergiləri hesablayır
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - gross
  *             properties:
- *               month:
+ *               gross:
+ *                 type: number
+ *                 minimum: 400
+ *                 example: 2500
+ *               employeeType:
  *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-01"
- *               year:
- *                 type: string
- *                 required: true
- *                 example: "2024"
+ *                 enum: [state, private]
+ *                 example: "private"
  *     responses:
  *       200:
  *         description: Vergilər uğurla hesablandı
@@ -829,30 +962,165 @@ router.put("/:id/tax-data", updateEmployeeTaxData);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: object
  *                   properties:
- *                     grossSalary:
+ *                     gross:
  *                       type: number
- *                     incomeTax:
- *                       type: number
- *                     socialSecurity:
- *                       type: number
- *                     netSalary:
- *                       type: number
+ *                     employeeType:
+ *                       type: string
+ *                     taxes:
+ *                       type: object
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
-router.post("/:id/calculate-taxes", calculateEmployeeTaxes);
+router.post("/calculate-taxes", calculateEmployeeTaxes);
 
-// 🔔 NOTIFICATION ROUTES
+// ===================== ÖDƏNİŞ ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/employees/{id}/payments:
+ *   get:
+ *     summary: İşçi ödənişlərini getir
+ *     tags: [Payments]
+ *     description: İşçinin bütün ödəniş tarixçəsini gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Ödənişlər uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     payment_history:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Payment'
+ *                     tax_payment_history:
+ *                       type: array
+ *                     last_payment_date:
+ *                       type: string
+ *                       format: date-time
+ *                     next_payment_date:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/:id/payments", getEmployeePayments);
+
+/**
+ * @swagger
+ * /api/employees/{id}/payments:
+ *   post:
+ *     summary: İşçi ödənişi əlavə et
+ *     tags: [Payments]
+ *     description: İşçiyə yeni ödəniş əlavə edir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - paymentType
+ *               - amount
+ *               - paymentDate
+ *               - forMonth
+ *             properties:
+ *               paymentType:
+ *                 type: string
+ *                 enum: [salary, bonus, advance, other]
+ *                 example: "salary"
+ *               amount:
+ *                 type: number
+ *                 example: 2150.00
+ *               paymentDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-05-15"
+ *               forMonth:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-05-01"
+ *               description:
+ *                 type: string
+ *                 example: "Yanvar ayı maaşı"
+ *               taxDetails:
+ *                 type: object
+ *     responses:
+ *       201:
+ *         description: Ödəniş uğurla əlavə edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Ödəniş əlavə edildi"
+ *                     payment:
+ *                       $ref: '#/components/schemas/Payment'
+ *                     last_payment_date:
+ *                       type: string
+ *                       format: date-time
+ *                     next_payment_date:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.post("/:id/payments", addEmployeePayment);
+
+// ===================== NOTIFICATION ƏMƏLİYYATLARI =====================
 
 /**
  * @swagger
  * /api/employees/{id}/notifications:
  *   get:
- *     summary: İşçinin bildirişlərini gətir
+ *     summary: İşçi bildirişlərini getir
  *     tags: [Notifications]
+ *     description: İşçinin bütün bildirişlərini gətirir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
  *         description: Bildirişlər uğurla gətirildi
@@ -863,81 +1131,112 @@ router.post("/:id/calculate-taxes", calculateEmployeeTaxes);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Notification'
+ *                 count:
+ *                   type: number
+ *                   example: 5
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:id/notifications", getNotifications);
 
 /**
  * @swagger
- * /api/employees/{id}/notifications/filter:
+ * /api/employees/{id}/notifications/{notificationId}:
  *   get:
- *     summary: Status üzrə bildirişləri gətir
+ *     summary: Bildirişi ID ilə getir
  *     tags: [Notifications]
+ *     description: Müəyyən edilmiş ID-yə sahib bildirişi gətirir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - in: query
- *         name: status
- *         required: true
- *         schema:
- *           type: string
- *           enum: [unread, read]
- *         description: Bildiriş statusu
+ *       - $ref: '#/components/parameters/idParam'
+ *       - $ref: '#/components/parameters/notificationIdParam'
  *     responses:
  *       200:
- *         description: Bildirişlər uğurla gətirildi
+ *         description: Bildiriş uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Notification'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
-router.get("/:id/notifications/filter", getNotificationsByStatus);
+router.get("/:id/notifications/:notificationId", getNotificationById);
 
 /**
  * @swagger
  * /api/employees/{id}/notifications:
  *   post:
- *     summary: İşçi üçün bildiriş əlavə et
+ *     summary: Bildiriş əlavə et
  *     tags: [Notifications]
+ *     description: İşçiyə yeni bildiriş əlavə edir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - message
  *             properties:
- *               title:
- *                 type: string
- *                 required: true
- *                 example: "Yeni maaş tənzimləməsi"
  *               message:
  *                 type: string
- *                 required: true
- *                 example: "Maaşınız 10% artırıldı"
+ *                 example: "Yeni maaş hesablanmışdır"
  *               type:
  *                 type: string
  *                 enum: [info, warning, success, error]
- *                 example: "success"
+ *                 example: "info"
  *     responses:
  *       201:
  *         description: Bildiriş uğurla əlavə edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Notification'
+ *                 message:
+ *                   type: string
+ *                   example: "Bildiriş əlavə edildi"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.post("/:id/notifications", addNotification);
-
-/**
- * @swagger
- * /api/employees/{id}/notifications/{notificationId}:
- *   get:
- *     summary: ID ilə bildirişi gətir
- *     tags: [Notifications]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - $ref: '#/components/parameters/notificationIdParam'
- *     responses:
- *       200:
- *         description: Bildiriş uğurla gətirildi
- */
-router.get("/:id/notifications/:notificationId", getNotificationById);
 
 /**
  * @swagger
@@ -945,18 +1244,50 @@ router.get("/:id/notifications/:notificationId", getNotificationById);
  *   put:
  *     summary: Bildirişi yenilə
  *     tags: [Notifications]
+ *     description: Mövcud bildirişi yeniləyir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *       - $ref: '#/components/parameters/notificationIdParam'
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Notification'
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [info, warning, success, error]
+ *               isRead:
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Bildiriş uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Notification'
+ *                 message:
+ *                   type: string
+ *                   example: "Bildiriş yeniləndi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.put("/:id/notifications/:notificationId", updateNotification);
 
@@ -966,12 +1297,36 @@ router.put("/:id/notifications/:notificationId", updateNotification);
  *   delete:
  *     summary: Bildirişi sil
  *     tags: [Notifications]
+ *     description: Bildirişi sistemdən silir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *       - $ref: '#/components/parameters/notificationIdParam'
  *     responses:
  *       200:
  *         description: Bildiriş uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Notification'
+ *                 message:
+ *                   type: string
+ *                   example: "Bildiriş silindi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.delete("/:id/notifications/:notificationId", deleteNotification);
 
@@ -981,35 +1336,79 @@ router.delete("/:id/notifications/:notificationId", deleteNotification);
  *   delete:
  *     summary: Bütün bildirişləri təmizlə
  *     tags: [Notifications]
+ *     description: İşçinin bütün bildirişlərini təmizləyir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Bildirişlər uğurla təmizləndi
+ *         $ref: '#/components/responses/Success'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.delete("/:id/notifications", clearNotifications);
 
-// 📅 LEAVE ROUTES
+/**
+ * @swagger
+ * /api/employees/{id}/notifications-filter:
+ *   get:
+ *     summary: Bildirişləri statusa görə filter et
+ *     tags: [Notifications]
+ *     description: Bildirişləri oxunub-oxunmama statusuna görə filter edir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [read, unread]
+ *         description: Bildiriş statusu
+ *     responses:
+ *       200:
+ *         description: Bildirişlər uğurla filter edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Notification'
+ *                 count:
+ *                   type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/:id/notifications-filter", getNotificationsByStatus);
+
+// ===================== MƏZUNİYYƏT ƏMƏLİYYATLARI =====================
 
 /**
  * @swagger
  * /api/employees/{employeeId}/leaves:
  *   get:
- *     summary: İşçinin məzuniyyətlərini gətir
+ *     summary: İşçinin bütün məzuniyyətlərini getir
  *     tags: [Leaves]
+ *     description: İşçinin bütün məzuniyyət tarixçəsini gətirir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [pending, approved, rejected]
- *         description: Məzuniyyət statusu
- *       - in: query
- *         name: year
- *         schema:
- *           type: string
- *         description: İl üzrə filter
  *     responses:
  *       200:
  *         description: Məzuniyyətlər uğurla gətirildi
@@ -1020,19 +1419,65 @@ router.delete("/:id/notifications", clearNotifications);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Leave'
+ *                 count:
+ *                   type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:employeeId/leaves", getEmployeeLeaves);
 
 /**
  * @swagger
+ * /api/employees/{employeeId}/leaves/{leaveId}:
+ *   get:
+ *     summary: Xüsusi məzuniyyəti getir
+ *     tags: [Leaves]
+ *     description: Müəyyən edilmiş ID-yə sahib məzuniyyəti gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/leaveIdParam'
+ *     responses:
+ *       200:
+ *         description: Məzuniyyət uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Leave'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/:employeeId/leaves/:leaveId", getEmployeeLeaveById);
+
+/**
+ * @swagger
  * /api/employees/{employeeId}/leaves:
  *   post:
- *     summary: İşçi üçün məzuniyyət əlavə et
+ *     summary: Məzuniyyət əlavə et
  *     tags: [Leaves]
+ *     description: İşçiyə yeni məzuniyyət əlavə edir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
  *     requestBody:
@@ -1040,53 +1485,43 @@ router.get("/:employeeId/leaves", getEmployeeLeaves);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               startDate:
- *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-02-01"
- *               endDate:
- *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-02-05"
- *               type:
- *                 type: string
- *                 required: true
- *                 enum: [annual, sick, maternity, unpaid, other]
- *                 example: "annual"
- *               reason:
- *                 type: string
- *                 example: "Ailəvi məzuniyyət"
+ *             $ref: '#/components/schemas/Leave'
  *     responses:
- *       201:
+ *       200:
  *         description: Məzuniyyət uğurla əlavə edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Leave'
+ *                 message:
+ *                   type: string
+ *                   example: "Məzuniyyət əlavə edildi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.post("/:employeeId/leaves", addLeave);
 
 /**
  * @swagger
  * /api/employees/{employeeId}/leaves/{leaveId}:
- *   get:
- *     summary: ID ilə məzuniyyəti gətir
- *     tags: [Leaves]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - $ref: '#/components/parameters/leaveIdParam'
- *     responses:
- *       200:
- *         description: Məzuniyyət uğurla gətirildi
- */
-router.get("/:employeeId/leaves/:leaveId", getEmployeeLeaveById);
-
-/**
- * @swagger
- * /api/employees/{employeeId}/leaves/{leaveId}:
  *   put:
- *     summary: Məzuniyyəti yenilə
+ *     summary: Məzuniyyət yenilə
  *     tags: [Leaves]
+ *     description: Mövcud məzuniyyəti yeniləyir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
  *       - $ref: '#/components/parameters/leaveIdParam'
@@ -1099,49 +1534,6 @@ router.get("/:employeeId/leaves/:leaveId", getEmployeeLeaveById);
  *     responses:
  *       200:
  *         description: Məzuniyyət uğurla yeniləndi
- */
-router.put("/:employeeId/leaves/:leaveId", updateLeave);
-
-/**
- * @swagger
- * /api/employees/{employeeId}/leaves/{leaveId}:
- *   delete:
- *     summary: Məzuniyyəti sil
- *     tags: [Leaves]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - $ref: '#/components/parameters/leaveIdParam'
- *     responses:
- *       200:
- *         description: Məzuniyyət uğurla silindi
- */
-router.delete("/:employeeId/leaves/:leaveId", deleteLeave);
-
-// ⏰ ATTENDANCE ROUTES
-
-/**
- * @swagger
- * /api/employees/{employeeId}/attendances:
- *   get:
- *     summary: İşçinin iş vaxtı qeydlərini gətir
- *     tags: [Attendance]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - in: query
- *         name: month
- *         schema:
- *           type: string
- *           format: date
- *         description: Ay üzrə filter (YYYY-MM)
- *       - in: query
- *         name: date
- *         schema:
- *           type: string
- *           format: date
- *         description: Xüsusi tarix üzrə filter
- *     responses:
- *       200:
- *         description: İş vaxtı qeydləri uğurla gətirildi
  *         content:
  *           application/json:
  *             schema:
@@ -1149,19 +1541,144 @@ router.delete("/:employeeId/leaves/:leaveId", deleteLeave);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Leave'
+ *                 message:
+ *                   type: string
+ *                   example: "Məzuniyyət yeniləndi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.put("/:employeeId/leaves/:leaveId", updateLeave);
+
+/**
+ * @swagger
+ * /api/employees/{employeeId}/leaves/{leaveId}:
+ *   delete:
+ *     summary: Məzuniyyət sil
+ *     tags: [Leaves]
+ *     description: Məzuniyyəti sistemdən silir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/leaveIdParam'
+ *     responses:
+ *       200:
+ *         description: Məzuniyyət uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Leave'
+ *                 message:
+ *                   type: string
+ *                   example: "Məzuniyyət silindi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.delete("/:employeeId/leaves/:leaveId", deleteLeave);
+
+// ===================== İŞ GİRİŞİ ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/employees/{employeeId}/attendances:
+ *   get:
+ *     summary: İşçinin bütün iş girişlərini getir
+ *     tags: [Attendance]
+ *     description: İşçinin bütün iş giriş tarixçəsini gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/employeeIdParam'
+ *     responses:
+ *       200:
+ *         description: İş girişləri uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Attendance'
+ *                 count:
+ *                   type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:employeeId/attendances", getEmployeeAttendances);
 
 /**
  * @swagger
+ * /api/employees/{employeeId}/attendances/{attendanceId}:
+ *   get:
+ *     summary: Xüsusi iş girişini getir
+ *     tags: [Attendance]
+ *     description: Müəyyən edilmiş ID-yə sahib iş girişini gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/attendanceIdParam'
+ *     responses:
+ *       200:
+ *         description: İş girişi uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/Attendance'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/:employeeId/attendances/:attendanceId", getAttendanceById);
+
+/**
+ * @swagger
  * /api/employees/{employeeId}/attendances:
  *   post:
- *     summary: İş vaxtı qeydi əlavə et
+ *     summary: İş girişi əlavə et
  *     tags: [Attendance]
+ *     description: İşçiyə yeni iş girişi əlavə edir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
  *     requestBody:
@@ -1169,56 +1686,43 @@ router.get("/:employeeId/attendances", getEmployeeAttendances);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               date:
- *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-01-20"
- *               checkIn:
- *                 type: string
- *                 format: time
- *                 required: true
- *                 example: "09:00"
- *               checkOut:
- *                 type: string
- *                 format: time
- *                 example: "18:00"
- *               status:
- *                 type: string
- *                 enum: [present, absent, late, half-day]
- *                 example: "present"
- *               notes:
- *                 type: string
- *                 example: "Normal iş günü"
+ *             $ref: '#/components/schemas/Attendance'
  *     responses:
- *       201:
- *         description: İş vaxtı qeydi uğurla əlavə edildi
+ *       200:
+ *         description: İş girişi uğurla əlavə edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Attendance'
+ *                 message:
+ *                   type: string
+ *                   example: "İş girişi əlavə edildi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.post("/:employeeId/attendances", addAttendance);
 
 /**
  * @swagger
  * /api/employees/{employeeId}/attendances/{attendanceId}:
- *   get:
- *     summary: ID ilə iş vaxtı qeydini gətir
- *     tags: [Attendance]
- *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
- *       - $ref: '#/components/parameters/attendanceIdParam'
- *     responses:
- *       200:
- *         description: İş vaxtı qeydi uğurla gətirildi
- */
-router.get("/:employeeId/attendances/:attendanceId", getAttendanceById);
-
-/**
- * @swagger
- * /api/employees/{employeeId}/attendances/{attendanceId}:
  *   put:
- *     summary: İş vaxtı qeydini yenilə
+ *     summary: İş girişi yenilə
  *     tags: [Attendance]
+ *     description: Mövcud iş girişini yeniləyir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
  *       - $ref: '#/components/parameters/attendanceIdParam'
@@ -1230,7 +1734,28 @@ router.get("/:employeeId/attendances/:attendanceId", getAttendanceById);
  *             $ref: '#/components/schemas/Attendance'
  *     responses:
  *       200:
- *         description: İş vaxtı qeydi uğurla yeniləndi
+ *         description: İş girişi uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Attendance'
+ *                 message:
+ *                   type: string
+ *                   example: "İş girişi yeniləndi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.put("/:employeeId/attendances/:attendanceId", updateAttendance);
 
@@ -1238,37 +1763,152 @@ router.put("/:employeeId/attendances/:attendanceId", updateAttendance);
  * @swagger
  * /api/employees/{employeeId}/attendances/{attendanceId}:
  *   delete:
- *     summary: İş vaxtı qeydini sil
+ *     summary: İş girişi sil
  *     tags: [Attendance]
+ *     description: İş girişini sistemdən silir
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/employeeIdParam'
  *       - $ref: '#/components/parameters/attendanceIdParam'
  *     responses:
  *       200:
- *         description: İş vaxtı qeydi uğurla silindi
+ *         description: İş girişi uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Attendance'
+ *                 message:
+ *                   type: string
+ *                   example: "İş girişi silindi"
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.delete("/:employeeId/attendances/:attendanceId", deleteAttendance);
 
-// 📁 FILE ROUTES
+// ===================== ŞİRKƏT ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/employees/company/{companyId}:
+ *   get:
+ *     summary: Şirkətə görə işçiləri getir
+ *     tags: [Employees]
+ *     description: Müəyyən edilmiş şirkətə aid işçiləri gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/companyIdParam'
+ *     responses:
+ *       200:
+ *         description: İşçilər uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Employee'
+ *                 count:
+ *                   type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/company/:companyId", getEmployeesByCompany);
+
+/**
+ * @swagger
+ * /api/employees/status/filter:
+ *   get:
+ *     summary: Statusa görə işçiləri getir
+ *     tags: [Employees]
+ *     description: İşçiləri status və şirkətə görə filter edir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, on_leave, terminated]
+ *         description: İşçi statusu
+ *       - in: query
+ *         name: companyId
+ *         schema:
+ *           type: string
+ *         description: Şirkət ID-si
+ *     responses:
+ *       200:
+ *         description: İşçilər uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Employee'
+ *                 count:
+ *                   type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/status/filter", getEmployeesByStatus);
+
+// ===================== DİGƏR ƏMƏLİYYATLAR =====================
 
 /**
  * @swagger
  * /api/employees/{id}/download:
  *   get:
- *     summary: İşçi faylını yüklə
- *     tags: [Employees]
+ *     summary: İşçi faylını endir
+ *     tags: [Employee Files]
+ *     description: İşçinin yüklədiyi faylı endirir (download)
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Fayl uğurla yükləndi
+ *         description: Fayl uğurla endirildi
  *         content:
  *           application/octet-stream:
  *             schema:
  *               type: string
  *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
  *       404:
- *         description: Fayl tapılmadı
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:id/download", downloadEmployeeFile);
 
@@ -1277,9 +1917,12 @@ router.get("/:id/download", downloadEmployeeFile);
  * /api/employees/{id}/view:
  *   get:
  *     summary: İşçi faylını göstər
- *     tags: [Employees]
+ *     tags: [Employee Files]
+ *     description: İşçinin yüklədiyi faylı göstərir (view)
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/employeeIdParam'
+ *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
  *         description: Fayl uğurla göstərildi
@@ -1288,9 +1931,169 @@ router.get("/:id/download", downloadEmployeeFile);
  *             schema:
  *               type: string
  *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
  *       404:
- *         description: Fayl tapılmadı
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
  */
 router.get("/:id/view", viewEmployeeFile);
+
+/**
+ * @swagger
+ * /api/employees/{id}/image:
+ *   get:
+ *     summary: İşçinin şəklini getir
+ *     tags: [Employee Files]
+ *     description: İşçinin profil şəklini gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Şəkil uğurla gətirildi
+ *         content:
+ *           image/*:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/:id/image", getEmployeeImage);
+
+/**
+ * @swagger
+ * /api/employees/reports/salaries:
+ *   get:
+ *     summary: Maaş hesabatı al
+ *     tags: [Reports]
+ *     description: Maaş hesabatını gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: string
+ *         description: Ay (format: YYYY-MM)
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: string
+ *         description: İl
+ *       - in: query
+ *         name: companyId
+ *         schema:
+ *           type: string
+ *         description: Şirkət ID-si
+ *       - in: query
+ *         name: employeeType
+ *         schema:
+ *           type: string
+ *           enum: [state, private]
+ *         description: İşçi növü
+ *     responses:
+ *       200:
+ *         description: Maaş hesabatı uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Employee'
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalEmployees:
+ *                       type: number
+ *                     totalGross:
+ *                       type: number
+ *                     totalTax:
+ *                       type: number
+ *                     totalSocial:
+ *                       type: number
+ *                     totalNet:
+ *                       type: number
+ *                 generatedAt:
+ *                   type: string
+ *                   format: date-time
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.get("/reports/salaries", getSalaryReport);
+
+/**
+ * @swagger
+ * /api/employees/salaries/bulk:
+ *   put:
+ *     summary: Toplu maaş yeniləməsi
+ *     tags: [Salary & Taxes]
+ *     description: Birdən çox işçinin maaşını yeniləyir
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - updates
+ *             properties:
+ *               updates:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - employeeId
+ *                   properties:
+ *                     employeeId:
+ *                       type: string
+ *                     gross:
+ *                       type: number
+ *                     employeeType:
+ *                       type: string
+ *                       enum: [state, private]
+ *     responses:
+ *       200:
+ *         description: Maaşlar uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                 errors:
+ *                   type: array
+ *                 message:
+ *                   type: string
+ *                   example: "10 işçinin maaşı yeniləndi"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.put("/salaries/bulk", bulkUpdateSalaries);
 
 export default router;

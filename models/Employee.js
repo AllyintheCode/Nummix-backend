@@ -1,4 +1,6 @@
+// models/Employee.js
 import mongoose from "mongoose";
+import taxCalculationService from '../services/taxCalculationService.js';
 
 // ===================== 💰 Ödəniş Tarixləri Schema =====================
 const paymentHistorySchema = new mongoose.Schema({
@@ -53,7 +55,7 @@ const leaveSchema = new mongoose.Schema({
   daysRemaining: { type: Number, default: 0 },
   status: { type: String, enum: ["approved", "pending", "rejected"], default: "pending" },
   createdAt: { type: Date, default: Date.now },
-  reason :{ type: String },
+  reason: { type: String },
   notes: { type: String }
 });
 
@@ -77,38 +79,36 @@ const employeeSchema = new mongoose.Schema({
   idSerialNumber: { type: String, required: true },
   phone: { type: String, required: true },
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  filename: String,           // Faylın orijinal adı: "document.pdf"
-  contentType: String,        // MIME type: "application/pdf"
-  data: Buffer,              // Faylın binary məlumatı
-  fileSize: Number,    
-    originalName: String,      // Orijinal fayl adı
+  filename: String,
+  contentType: String,
+  data: Buffer,
+  fileSize: Number,
+  originalName: String,
 
-  
   // ===================== 💰 MAAŞ NÖVÜ VƏ ÖDƏNİŞ MƏLUMATLARI =====================
-  // İşçi növü (dövlət və ya özəl) - vergi hesablamaları üçün ÇOX VACİB
   employeeType: {
     type: String,
     enum: ["state", "private"],
     required: true,
     default: "private"
   },
-  
+
   // Cari ay üçün maaş məlumatları
   gross: { type: Number, default: 0 },
   tax: { type: Number, default: 0 },
   social_pay: { type: Number, default: 0 },
   Net_salary: { type: Number, default: 0 },
-  salary_status: { type: String, default: "pending" }, // "pending", "paid", "cancelled"
-  
+  salary_status: { type: String, default: "pending" },
+
   // Maaş ödəniş tarixləri
   paymentHistory: [paymentHistorySchema],
-  
+
   // Vergi ödəniş tarixləri (işçi üçün)
   taxPaymentHistory: [taxPaymentSchema],
-  
+
   // Son ödəniş tarixi
   lastPaymentDate: { type: Date },
-  
+
   // Növbəti gözlənilən ödəniş tarixi
   nextPaymentDate: { type: Date },
 
@@ -125,10 +125,149 @@ const employeeSchema = new mongoose.Schema({
   leaves: [leaveSchema],
   attendances: [attendanceSchema],
   Department: { type: String },
-  filename: { type: String },
-  contentType: { type: String },
-  data: { type: Buffer },
-}, 
-{ timestamps: true });
+}, { timestamps: true });
+
+// ===================== ⚡ AVTOMATİK MAAŞ HESABLAMA MIDDLEWARE =====================
+
+// gross və ya employeeType dəyişdikdə avtomatik hesabla
+employeeSchema.pre('save', function (next) {
+  // Əgər gross və ya employeeType dəyişməyibsə, hesablama
+  if (!this.isModified('gross') && !this.isModified('employeeType')) {
+    return next();
+  }
+
+  // Əgər gross yoxdursa və ya 0-dırsa, hesablama
+  if (!this.gross || this.gross === 0) {
+    this.tax = 0;
+    this.social_pay = 0;
+    this.Net_salary = 0;
+    this.salary_status = "not_set";
+    return next();
+  }
+
+  // Minimum əməkhaqqı yoxlaması
+  if (this.gross < 400) {
+    const err = new Error('Əməkhaqqı 400 AZN-dən aşağı ola bilməz');
+    return next(err);
+  }
+
+  try {
+    // Vergiləri avtomatik hesabla
+    const taxResult = taxCalculationService.calculateAllTaxes(
+      this.gross,
+      this.employeeType || 'private'
+    );
+
+    // Vergiləri ayır
+    let tax, social_pay;
+
+    if (this.employeeType === 'state') {
+      tax = taxResult.employee.taxes.incomeTax;
+      social_pay = taxResult.employee.taxes.dsmf +
+        taxResult.employee.taxes.ish +
+        taxResult.employee.taxes.its;
+    } else {
+      tax = taxResult.employee.taxes.incomeTax;
+
+      // Social insurance hesabla
+      social_pay = taxResult.employee.taxes.dsmf +
+        taxResult.employee.taxes.ish +
+        taxResult.employee.taxes.its;
+
+      // Əgər gvTax varsa (8000+ üçün)
+      if (taxResult.employee.taxes.gvTax) {
+        social_pay += taxResult.employee.taxes.gvTax;
+      }
+    }
+
+    // Dəyərləri təyin et
+    this.tax = Number(tax.toFixed(2));
+    this.social_pay = Number(social_pay.toFixed(2));
+    this.Net_salary = Number(taxResult.employee.netSalary.toFixed(2));
+    this.salary_status = "pending";
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Əgər findOneAndUpdate istifadə ediriksə (PATCH/PUT üçün)
+employeeSchema.pre('findOneAndUpdate', async function (next) {
+  const update = this.getUpdate();
+
+  // Əgər gross və ya employeeType dəyişməyibsə
+  if (!update.gross && !update.employeeType) {
+    return next();
+  }
+
+  const gross = update.gross;
+  const employeeType = update.employeeType;
+
+  // Əgər gross undefined-dırsa, heç nə etmə
+  if (gross === undefined) {
+    return next();
+  }
+
+  // Əgər gross 0 və ya null-dursa
+  if (!gross || gross === 0) {
+    update.tax = 0;
+    update.social_pay = 0;
+    update.Net_salary = 0;
+    update.salary_status = "not_set";
+    return next();
+  }
+
+  // Minimum əməkhaqqı yoxlaması
+  if (gross < 400) {
+    const err = new Error('Əməkhaqqı 400 AZN-dən aşağı ola bilməz');
+    return next(err);
+  }
+
+  try {
+    // Cari employeeType-u al (update-də gəlməyibsə, bazadan oxu)
+    let currentEmployeeType = employeeType;
+    if (!currentEmployeeType) {
+      const docToUpdate = await this.model.findOne(this.getQuery());
+      currentEmployeeType = docToUpdate ? docToUpdate.employeeType : 'private';
+    }
+
+    // Vergiləri hesabla
+    const taxResult = taxCalculationService.calculateAllTaxes(
+      gross,
+      currentEmployeeType
+    );
+
+    // Vergiləri ayır
+    let tax, social_pay;
+
+    if (currentEmployeeType === 'state') {
+      tax = taxResult.employee.taxes.incomeTax;
+      social_pay = taxResult.employee.taxes.dsmf +
+        taxResult.employee.taxes.ish +
+        taxResult.employee.taxes.its;
+    } else {
+      tax = taxResult.employee.taxes.incomeTax;
+      social_pay = taxResult.employee.taxes.dsmf +
+        taxResult.employee.taxes.ish +
+        taxResult.employee.taxes.its;
+
+      // Əgər gvTax varsa (8000+ üçün)
+      if (taxResult.employee.taxes.gvTax) {
+        social_pay += taxResult.employee.taxes.gvTax;
+      }
+    }
+
+    // Update obyektinə vergi dəyərlərini əlavə et
+    update.tax = Number(tax.toFixed(2));
+    update.social_pay = Number(social_pay.toFixed(2));
+    update.Net_salary = Number(taxResult.employee.netSalary.toFixed(2));
+    update.salary_status = "pending";
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default mongoose.model("Employee", employeeSchema);
