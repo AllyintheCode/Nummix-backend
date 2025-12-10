@@ -4,9 +4,16 @@ import bcrypt from "bcryptjs";
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true },
-    companyName: { type: String, required: true },
+    companyName: { type: String },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    otp: { type: String },
+    otpExpires: { type: Date },
+    isVerified: { type: Boolean, default: false },
+    resetOtp: { type: String },
+    resetOtpExpires: { type: Date },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockUntil: { type: Date },
   },
   { timestamps: true }
 );
