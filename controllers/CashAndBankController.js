@@ -1,7 +1,7 @@
-const CashAndBank = require("../models/CashAndBank");
+import CashAndBank from "../models/CashAndBank.js";
 
 // Yeni əməliyyat əlavə et
-exports.createTransaction = async (req, res) => {
+export const createTransaction = async (req, res) => {
   try {
     const {
       operationType,
@@ -32,8 +32,7 @@ exports.createTransaction = async (req, res) => {
   }
 };
 
-// Bütün əməliyyatları götür
-exports.getAllTransactions = async (req, res) => {
+export const getAllTransactions = async (req, res) => {
   try {
     const transactions = await CashAndBank.find().populate(
       "createdBy",
@@ -45,8 +44,7 @@ exports.getAllTransactions = async (req, res) => {
   }
 };
 
-// Tək əməliyyatın detallarını götür
-exports.getTransactionById = async (req, res) => {
+export const getTransactionById = async (req, res) => {
   try {
     const transaction = await CashAndBank.findById(req.params.id).populate(
       "createdBy",
@@ -60,8 +58,7 @@ exports.getTransactionById = async (req, res) => {
   }
 };
 
-// Əməliyyatı update et
-exports.updateTransaction = async (req, res) => {
+export const updateTransaction = async (req, res) => {
   try {
     const transaction = await CashAndBank.findByIdAndUpdate(
       req.params.id,
@@ -76,8 +73,7 @@ exports.updateTransaction = async (req, res) => {
   }
 };
 
-// Əməliyyatı sil
-exports.deleteTransaction = async (req, res) => {
+export const deleteTransaction = async (req, res) => {
   try {
     const transaction = await CashAndBank.findByIdAndDelete(req.params.id);
     if (!transaction)

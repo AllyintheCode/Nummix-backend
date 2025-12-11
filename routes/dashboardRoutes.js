@@ -7,102 +7,244 @@ import {
   getTotalAssets,
 } from "../controllers/DashboardController.js";
 
+import protect from "../middlewares/authMiddleware.js";
+
 const router = express.Router();
 
 /**
  * @swagger
- * /dashboard/stats:
- *   get:
- *     summary: Ümumi gəlir, ümumi xərclər və xalis mənfəət
- *     responses:
- *       200:
- *         description: Dashboard stats
- *         content:
- *           application/json:
- *             example:
- *               totalIncome: 15000
- *               totalExpense: 12000
- *               netIncome: 3000
+ * tags:
+ *   - name: Dashboard
+ *     description: Dashboard və maliyyə statistikası API-ləri
  */
-router.get("/stats", getDashboardStats);
 
 /**
  * @swagger
- * /dashboard/assets:
+ * /api/dashboard/stats:
  *   get:
- *     summary: Ümumi aktivlər (Cash + Bank)
+ *     summary: Dashboard üçün maliyyə statistikasını gətir
+ *     tags: [Dashboard]
+ *     description: Ümumi gəlir, xərclər və xalis mənfəəti hesablayır və qaytarır.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     responses:
  *       200:
- *         description: Ümumi aktivlər və breakdown
+ *         description: Statistika uğurla gətirildi
  *         content:
  *           application/json:
- *             example:
- *               totalAssets: 23000
- *               breakdown:
- *                 - account: "Cash"
- *                   balance: 10000
- *                 - account: "Bank"
- *                   balance: 13000
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalIncome:
+ *                   type: number
+ *                   example: 50000
+ *                 totalExpense:
+ *                   type: number
+ *                   example: 20000
+ *                 netIncome:
+ *                   type: number
+ *                   example: 30000
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/assets", getTotalAssets);
+
+router.get("/stats", protect, getDashboardStats);
 
 /**
  * @swagger
- * /dashboard/finance/last6months:
+ * /api/dashboard/assets:
  *   get:
- *     summary: Son 6 ay Gəlir və Xərc
+ *     summary: Ümumi aktivləri gətir
+ *     tags: [Dashboard]
+ *     description: Cash və Bank hesablarındakı balansları toplayaraq ümumi aktivləri və hər bir hesabın balansını qaytarır.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     responses:
  *       200:
- *         description: Aylara görə gəlir və xərclər
+ *         description: Aktivlər uğurla gətirildi
  *         content:
  *           application/json:
- *             example:
- *               - month: "2025-06"
- *                 income: 10000
- *                 expense: 5000
- *               - month: "2025-07"
- *                 income: 12000
- *                 expense: 7000
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalAssets:
+ *                   type: number
+ *                   example: 75000
+ *                 breakdown:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       account:
+ *                         type: string
+ *                         example: "Cash"
+ *                       balance:
+ *                         type: number
+ *                         example: 50000
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/finance/last6months", getIncomeExpenseLast6Months);
+
+router.get("/assets", protect, getTotalAssets);
 
 /**
  * @swagger
- * /dashboard/profit-dynamics:
+ * /api/dashboard/finance/last6months:
  *   get:
- *     summary: Son 6 ay Mənfəət Dinamikası
+ *     summary: Son 6 ay üzrə gəlir və xərcləri gətir
+ *     tags: [Dashboard]
+ *     description: Son 6 ay üçün hər ayın gəlir və xərclərini hesablayır və qaytarır.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     responses:
  *       200:
- *         description: Aylara görə mənfəət
+ *         description: Son 6 ayın gəlir və xərcləri uğurla gətirildi
  *         content:
  *           application/json:
- *             example:
- *               - month: "2025-06"
- *                 profit: 5000
- *               - month: "2025-07"
- *                 profit: 5000
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   month:
+ *                     type: string
+ *                     example: "2025-07"
+ *                   income:
+ *                     type: number
+ *                     example: 15000
+ *                   expense:
+ *                     type: number
+ *                     example: 8000
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/profit-dynamics", getProfitDynamicsLast6Months);
+
+router.get("/finance/last6months", protect, getIncomeExpenseLast6Months);
 
 /**
  * @swagger
- * /dashboard/balance-percentage:
+ * /api/dashboard/profit-dynamics:
  *   get:
- *     summary: Balansın hesablar üzrə faizlə bölünməsi
+ *     summary: Son 6 ay üzrə mənfəət dinamikası
+ *     tags: [Dashboard]
+ *     description: Son 6 ay üçün hər ayın mənfəətini hesablayır (gəlir - xərclər) və qaytarır.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     responses:
  *       200:
- *         description: Aktivlər, öhdəliklər və kapital faizləri
+ *         description: Son 6 ayın mənfəət dinamikası uğurla gətirildi
  *         content:
  *           application/json:
- *             example:
- *               totalAssets: 23000
- *               totalLiabilities: 23000
- *               totalEquity: 23000
- *               breakdownPercent:
- *                 assets: "33.33"
- *                 liabilities: "33.33"
- *                 equity: "33.33"
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   month:
+ *                     type: string
+ *                     example: "2025-07"
+ *                   profit:
+ *                     type: number
+ *                     example: 7000
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/balance-percentage", getBalanceBreakdownPercentage);
+
+router.get("/profit-dynamics", protect, getProfitDynamicsLast6Months);
+
+/**
+ * @swagger
+ * /api/dashboard/balance-percentage:
+ *   get:
+ *     summary: Aktiv, Öhdəlik və Kapital üzrə balansın faiz paylanması
+ *     tags: [Dashboard]
+ *     description: Aktiv, Öhdəlik və Kapital hesablarının balanslarını toplayır və faiz nisbətlərini hesablayır. Hər bir hesabın balansı da göstərilir.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
+ *     responses:
+ *       200:
+ *         description: Balans faizi və hesabların breakdown-u uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalAssets:
+ *                   type: number
+ *                   example: 50000
+ *                 totalLiabilities:
+ *                   type: number
+ *                   example: 20000
+ *                 totalEquity:
+ *                   type: number
+ *                   example: 30000
+ *                 breakdownPercent:
+ *                   type: object
+ *                   properties:
+ *                     assets:
+ *                       type: string
+ *                       example: "50.00"
+ *                     liabilities:
+ *                       type: string
+ *                       example: "20.00"
+ *                     equity:
+ *                       type: string
+ *                       example: "30.00"
+ *                 accountsBreakdown:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       account:
+ *                         type: string
+ *                         example: "Cash"
+ *                       balance:
+ *                         type: number
+ *                         example: 30000
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+
+router.get("/balance-percentage", protect, getBalanceBreakdownPercentage);
 
 export default router;

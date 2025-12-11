@@ -1,3 +1,4 @@
+// routes/users.js
 import express from "express";
 import {
   registerUser,
@@ -7,76 +8,404 @@ import {
   resendOtp,
   forgotPassword,
   resetPassword,
+  getAllUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+  addCalendarDay,
+  updateCalendarDay,
+  deleteCalendarDay,
+  addEvent,
+  updateEvent,
+  deleteEvent,
+  updateFinancialData,
+  updateMonthlyData,
+  getAllCalendar,
+  getAllEvents,
+  getEventById,
+  getCalendarDayById,
+  updateSalaryFund,
+  updateCompanyTaxes,
+  getEmployeeFlowData,
+  updateEmployeeFlowData,
+  getPaymentOverview,
+  addAccountingEntry,
+  getAccountingEntries,
+  getAccountingBalances,
+  getAccountBalance,
+  generateAccountingReport,
+  createSampleAccountingTransaction,
+  updateAccountingEntry,
+  deleteAccountingEntry,
+  uploadCompanyFile,
+  getCompanyFiles,
+  downloadCompanyFile,
+  viewCompanyFile,
+  deleteCompanyFile,
 } from "../controllers/userController.js";
 import protect from "../middlewares/authMiddleware.js";
 import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
+import { upload } from "../controllers/userController.js";
+import rateLimit from "express-rate-limit";
 
 const router = express.Router();
 
 /**
  * @swagger
- * /users/register:
- *   post:
- *     summary: Yeni user qeydiyyatı
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               fullName:
- *                 type: string
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       201:
- *         description: User qeydiyyatdan keçdi
+
+ * tags:
+ *   - name: Authentication
+ *     description: İstifadəçi qeydiyyatı və giriş əməliyyatları
+ *   - name: Users
+ *     description: İstifadəçi CRUD əməliyyatları
+ *   - name: Financial
+ *     description: Maliyyə məlumatları idarəetməsi
+ *   - name: Calendar
+ *     description: Təqvim və gün idarəetməsi
+ *   - name: Events
+ *     description: Hadisə idarəetməsi
+ *   - name: Accounting
+ *     description: Mühasibat uçotu əməliyyatları
+ *   - name: Company Files
+ *     description: Şirkət fayllarının idarə edilməsi
  */
-router.post("/register", registerUser);
 
 /**
  * @swagger
- * /users/login:
- *   post:
- *     summary: Mövcud user ilə login
- *     requestBody:
- *       required: true
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - fullName
+ *         - companyName
+ *         - email
+ *         - password
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: İstifadəçi unikal ID-si
+ *         fullName:
+ *           type: string
+ *           description: İstifadəçinin tam adı
+ *         companyName:
+ *           type: string
+ *           description: Şirkət adı
+ *         email:
+ *           type: string
+ *           description: İstifadəçi email ünvanı
+ *         password:
+ *           type: string
+ *           description: Şifrə (hashlənmiş)
+ *         active_employee:
+ *           type: number
+ *           description: Aktiv işçi sayı
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: Yaradılma tarixi
+ * 
+ *     UserRegistration:
+ *       type: object
+ *       required:
+ *         - fullName
+ *         - companyName
+ *         - email
+ *         - password
+ *       properties:
+ *         fullName:
+ *           type: string
+ *           example: "Əli Məmmədov"
+ *         companyName:
+ *           type: string
+ *           example: "Şirkət MMC"
+ *         email:
+ *           type: string
+ *           example: "eli@example.com"
+ *         password:
+ *           type: string
+ *           example: "password123"
+ * 
+ *     UserLogin:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *       properties:
+ *         email:
+ *           type: string
+ *           example: "eli@example.com"
+ *         password:
+ *           type: string
+ *           example: "password123"
+ * 
+ *     LoginResponse:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         fullName:
+ *           type: string
+ *         companyName:
+ *           type: string
+ *         email:
+ *           type: string
+ * 
+ *     FinancialData:
+ *       type: object
+ *       properties:
+ *         gross_profit:
+ *           type: number
+ *           description: Ümumi gəlir
+ *         Net_profit:
+ *           type: number
+ *           description: Xalis gəlir
+ *         total_assets:
+ *           type: number
+ *           description: Ümumi aktivlər
+ *         Obligations_assets:
+ *           type: number
+ *           description: Öhdəliklər
+ * 
+ *     CalendarDay:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         date:
+ *           type: string
+ *           format: date
+ *         dayOfWeek:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: [Workday, Off day, Holiday]
+ *         events:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Event'
+ *         note:
+ *           type: string
+ * 
+ *     Event:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         title:
+ *           type: string
+ *         description:
+ *           type: string
+ *         startTime:
+ *           type: string
+ *         endTime:
+ *           type: string
+ *         location:
+ *           type: string
+ * 
+ *     AccountingEntry:
+ *       type: object
+ *       required:
+ *         - accountCode
+ *         - amount
+ *         - type
+ *         - description
+ *         - documentNumber
+ *       properties:
+ *         id:
+ *           type: string
+ *         accountCode:
+ *           type: string
+ *           enum: [543, 531, 533, 535]
+ *           description: Hesab kodu
+ *         accountName:
+ *           type: string
+ *           description: Hesab adı
+ *         amount:
+ *           type: number
+ *           description: Məbləğ
+ *         type:
+ *           type: string
+ *           enum: [debit, credit]
+ *           description: Əməliyyat növü
+ *         description:
+ *           type: string
+ *           description: Əməliyyat təsviri
+ *         documentNumber:
+ *           type: string
+ *           description: Sənəd nömrəsi
+ *         date:
+ *           type: string
+ *           format: date
+ *         status:
+ *           type: string
+ *           enum: [draft, posted, cancelled]
+ * 
+ *     SalaryFundUpdate:
+ *       type: object
+ *       required:
+ *         - month
+ *         - amount
+ *       properties:
+ *         month:
+ *           type: string
+ *           enum: [January, February, March, April, May, June, July, August, September, October, November, December]
+ *           example: "January"
+ *         amount:
+ *           type: number
+ *           example: 50000
+ * 
+ *     CompanyTaxesUpdate:
+ *       type: object
+ *       properties:
+ *         month:
+ *           type: string
+ *           enum: [January, February, March, April, May, June, July, August, September, October, November, December]
+ *         dsmf:
+ *           type: number
+ *         ish:
+ *           type: number
+ *         its:
+ *           type: number
+ * 
+ *     CompanyFileUpload:
+ *       type: object
+ *       properties:
+ *         title:
+ *           type: string
+ *         description:
+ *           type: string
+ *         category:
+ *           type: string
+ *           enum: [document, policy, report, training, template, other]
+ *         visibleTo:
+ *           type: string
+ *           enum: [all, departments, managers]
+ *         departments:
+ *           type: array
+ *           items:
+ *             type: string
+ *         tags:
+ *           type: array
+ *           items:
+ *             type: string
+ * 
+ *   responses:
+ *     UnauthorizedError:
+ *       description: İcazə yoxdur
+
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               email:
+ *               error:
  *                 type: string
- *               password:
+ *                 example: "İcazə yoxdur"
+ * 
+ *     NotFoundError:
+ *       description: Məlumat tapılmadı
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               error:
  *                 type: string
+ *                 example: "İstifadəçi tapılmadı"
+ * 
+ *     ValidationError:
+ *       description: Validasiya xətası
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               error:
+ *                 type: string
+ *                 example: "Yanlış məlumat formatı"
+ * 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+// ===================== 🔐 AUTH ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/register:
+ *   post:
+ *     summary: Yeni istifadəçi qeydiyyatı
+ *     tags: [Authentication]
+ *     description: Sistemə yeni istifadəçi əlavə edir
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UserRegistration'
+ *     responses:
+ *       201:
+ *         description: İstifadəçi uğurla yaradıldı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 fullName:
+ *                   type: string
+ *                 companyName:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *       400:
+ *         description: Yanlış məlumat göndərildi
+ *       500:
+ *         description: Daxili server xətası
+
+ */
+router.post("/register", rateLimit, registerUser);
+/**
+ * @swagger
+
+ * /api/users/login:
+ *   post:
+ *     summary: İstifadəçi girişi
+ *     tags: [Authentication]
+ *     description: İstifadəçi sistəmə giriş edir
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UserLogin'
  *     responses:
  *       200:
- *         description: Login uğurlu oldu
+ *         description: Uğurlu giriş
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       401:
+ *         description: Giriş məlumatları yanlış
+ *       500:
+ *         description: Daxili server xətası
  */
 router.post("/login", loginLimiter, loginUser);
 
 /**
  * @swagger
- * /users/profile:
- *   get:
- *     summary: User profilini gətirmək
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Profil məlumatları
- */
-router.get("/profile", protect, getProfile);
-
-/**
- * @swagger
- * /users/verify-otp:
+ * /api/users/verify-otp:
  *   post:
  *     summary: OTP təsdiqi
+ *     tags: [Authentication]
+ *     description: İstifadəçi göndərilən OTP-ni təsdiqləyir.
+ *                  Hesab artıq təsdiqlənibsə və ya OTP yanlışdırsa uyğun mesaj qaytarılır.
  *     requestBody:
  *       required: true
  *       content:
@@ -84,21 +413,64 @@ router.get("/profile", protect, getProfile);
  *           schema:
  *             type: object
  *             properties:
- *               email:
+ *               userId:
  *                 type: string
+ *                 example: "64ab12c3d4ef567890123456"
  *               otp:
  *                 type: string
+ *                 example: "123456"
  *     responses:
  *       200:
- *         description: OTP təsdiqləndi
+ *         description: Hesab uğurla təsdiqləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Hesab uğurla təsdiqləndi ✅"
+ *       400:
+ *         description: OTP və ya istifadəçi vəziyyəti ilə bağlı səhv
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "OTP yanlışdır."
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "İstifadəçi tapılmadı."
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
  */
 router.post("/verify-otp", otpLimiter, verifyOtp);
 
 /**
  * @swagger
- * /users/resend-otp:
+ * /api/users/resend-otp:
  *   post:
- *     summary: OTP-nu yenidən göndərmək
+ *     summary: Yeni OTP göndərmək
+ *     tags: [Authentication]
+ *     description: İstifadəçi üçün yeni OTP kodu yaradır və email vasitəsilə göndərir.
+ *                  Hesab artıq təsdiqlənibsə və ya istifadəçi tapılmayıbsa uyğun mesaj qaytarılır.
  *     requestBody:
  *       required: true
  *       content:
@@ -106,19 +478,61 @@ router.post("/verify-otp", otpLimiter, verifyOtp);
  *           schema:
  *             type: object
  *             properties:
- *               email:
+ *               userId:
  *                 type: string
+ *                 example: "64ab12c3d4ef567890123456"
  *     responses:
  *       200:
- *         description: OTP yenidən göndərildi
+ *         description: Yeni OTP uğurla göndərildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Yeni OTP göndərildi."
+ *       400:
+ *         description: Hesab artıq təsdiqlənib
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Hesab artıq təsdiqlənib."
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "İstifadəçi tapılmadı."
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
  */
 router.post("/resend-otp", otpLimiter, resendOtp);
 
 /**
  * @swagger
- * /users/forgot-password:
+ * /api/users/forgot-password:
  *   post:
- *     summary: Şifrəni unutduqda
+ *     summary: Şifrəni unutmuş istifadəçi üçün OTP göndərmək
+ *     tags: [Authentication]
+ *     description: İstifadəçinin email ünvanına şifrə yeniləmə üçün OTP göndərir.
+ *                  Əgər istifadəçi tapılmazsa 404 qaytarılır.
  *     requestBody:
  *       required: true
  *       content:
@@ -128,17 +542,48 @@ router.post("/resend-otp", otpLimiter, resendOtp);
  *             properties:
  *               email:
  *                 type: string
+ *                 example: "user@example.com"
  *     responses:
  *       200:
- *         description: Şifrə bərpası linki göndərildi
+ *         description: OTP email-ə uğurla göndərildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "OTP email-ə göndərildi"
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "İstifadəçi tapılmadı"
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
  */
 router.post("/forgot-password", forgotPassword);
 
 /**
  * @swagger
- * /users/reset-password:
+ * /api/users/reset-password:
  *   post:
- *     summary: Şifrəni reset etmək
+ *     summary: Şifrəni yeniləmək
+ *     tags: [Authentication]
+ *     description: İstifadəçi email və OTP təqdim edərək şifrəsini yeniləyə bilər.
  *     requestBody:
  *       required: true
  *       content:
@@ -146,14 +591,1358 @@ router.post("/forgot-password", forgotPassword);
  *           schema:
  *             type: object
  *             properties:
- *               token:
+ *               email:
  *                 type: string
+ *                 example: "user@example.com"
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
  *               newPassword:
+ *                 type: string
+ *                 example: "YeniParol123"
+ *     responses:
+ *       200:
+ *         description: Şifrə uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Şifrə uğurla yeniləndi ✅"
+ *       400:
+ *         description: OTP etibarsız və ya müddəti bitib / OTP yanlışdır
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "OTP etibarsız və ya müddəti bitib"
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "İstifadəçi tapılmadı"
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+router.post("/reset-password", resetPassword);
+
+// ===================== 👥 USER CRUD ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Bütün istifadəçiləri gətir
+ *     tags: [Users]
+ *     description: Sistemdəki bütün istifadəçilərin siyahısını qaytarır
+ *     responses:
+ *       200:
+ *         description: İstifadəçi siyahısı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/User'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/", protect, getAllUsers);
+
+/**
+ * @swagger
+ * /api/users/profile:
+ *   get:
+ *     summary: İstifadəçi profili
+ *     tags: [Users]
+ *     description: Aktiv token ilə istifadəçi öz profil məlumatlarını əldə edə bilər.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profil məlumatları uğurla qaytarıldı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "64f0b8e2c2e4a1a234567890"
+ *                 fullName:
+ *                   type: string
+ *                   example: "Ali Asadzade"
+ *                 companyName:
+ *                   type: string
+ *                   example: "Nummix"
+ *                 email:
+ *                   type: string
+ *                   example: "ali@example.com"
+ *       401:
+ *         description: Token etibarsız və ya daxil edilməyib
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Token etibarsız"
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+router.get("/profile", protect, getProfile);
+
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   get:
+ *     summary: ID-ə görə istifadəçi məlumatı
+ *     tags: [Users]
+ *     description: Müəyyən edilmiş ID-yə uyğun istifadəçi məlumatını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: İstifadəçi ID-si
+ *     responses:
+ *       200:
+ *         description: İstifadəçi məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   put:
+ *     summary: İstifadəçi məlumatlarını yenilə
+ *     tags: [Users]
+ *     description: Müəyyən edilmiş istifadəçinin məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       200:
+ *         description: İstifadəçi uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   delete:
+ *     summary: İstifadəçi sil
+ *     tags: [Users]
+ *     description: Müəyyən edilmiş istifadəçini sistemdən silir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: İstifadəçi uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "İstifadəçi silindi"
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id", protect, getUserById);
+router.put("/:id", protect, updateUser);
+router.delete("/:id", protect, deleteUser);
+
+// ===================== 💰 FINANCIAL ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/financial:
+ *   put:
+ *     summary: Maliyyə məlumatlarını yenilə
+ *     tags: [Financial]
+ *     description: İstifadəçinin maliyyə məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/FinancialData'
+ *     responses:
+ *       200:
+ *         description: Maliyyə məlumatları uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.put("/:id/financial", protect, updateFinancialData);
+
+/**
+ * @swagger
+ * /api/users/{id}/monthly:
+ *   put:
+ *     summary: Aylıq məlumatları yenilə
+ *     tags: [Financial]
+ *     description: İstifadəçinin aylıq məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               month:
+ *                 type: string
+ *               dataType:
+ *                 type: string
+ *               value:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Aylıq məlumatlar uğurla yeniləndi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.put("/:id/monthly", protect, updateMonthlyData);
+
+// ===================== 💰 ƏMƏKHAQQI VƏ VERGİ ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/salary-fund:
+ *   put:
+ *     summary: Əməkhaqqı fondu yenilə
+ *     tags: [Financial]
+ *     description: Şirkətin əməkhaqqı fondunu yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SalaryFundUpdate'
+ *     responses:
+ *       200:
+ *         description: Əməkhaqqı fondu uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 month:
+ *                   type: string
+ *                 salary_fund:
+ *                   type: number
+ *                 company_taxes:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.put("/:id/salary-fund", protect, updateSalaryFund);
+
+/**
+ * @swagger
+ * /api/users/{id}/company-taxes:
+ *   put:
+ *     summary: Şirkət vergilərini yenilə
+ *     tags: [Financial]
+ *     description: Şirkətin vergi məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CompanyTaxesUpdate'
+ *     responses:
+ *       200:
+ *         description: Vergi məlumatları uğurla yeniləndi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.put("/:id/company-taxes", protect, updateCompanyTaxes);
+
+/**
+ * @swagger
+ * /api/users/{id}/employee-flow:
+ *   get:
+ *     summary: İşçi axını məlumatları
+ *     tags: [Financial]
+ *     description: İşçi gəliş-çıxış statistikasını gətirir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: İşçi axını məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 monthly_stats:
+ *                   type: object
+ *                 history:
+ *                   type: array
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   put:
+ *     summary: İşçi axını məlumatlarını yenilə
+ *     tags: [Financial]
+ *     description: İşçi gəliş-çıxış məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               month:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [new_hires, terminations, resignations]
+ *               count:
+ *                 type: number
+ *               employeeData:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: İşçi axını məlumatları uğurla yeniləndi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/employee-flow", protect, getEmployeeFlowData);
+router.put("/:id/employee-flow", protect, updateEmployeeFlowData);
+
+/**
+ * @swagger
+ * /api/users/{id}/payment-overview:
+ *   get:
+ *     summary: Ödəniş ümumi baxışı
+ *     tags: [Financial]
+ *     description: Bütün ödənişlərin ümumi baxışını gətirir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Ödəniş ümumi baxış məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: object
+ *                 current_month:
+ *                   type: object
+ *                 recent_employee_payments:
+ *                   type: array
+ *                 recent_employer_payments:
+ *                   type: array
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/payment-overview", protect, getPaymentOverview);
+
+// ===================== 📅 CALENDAR ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/calendar:
+ *   post:
+ *     summary: Yeni təqvim günü əlavə et
+ *     tags: [Calendar]
+ *     description: İstifadəçi üçün yeni təqvim günü yaradır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               dayOfWeek:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [Workday, Off day, Holiday]
+ *               events:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/Event'
+ *               note:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Təqvim günü uğurla yaradıldı
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   get:
+ *     summary: Bütün təqvim günlərini gətir
+ *     tags: [Calendar]
+ *     description: İstifadəçinin bütün təqvim günlərini qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Təqvim günləri siyahısı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/CalendarDay'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post("/:id/calendar", protect, addCalendarDay);
+router.get("/:id/calendar", protect, getAllCalendar);
+
+/**
+ * @swagger
+ * /api/users/{id}/calendar/{dayId}:
+ *   get:
+ *     summary: Xüsusi təqvim gününü gətir
+ *     tags: [Calendar]
+ *     description: Müəyyən edilmiş təqvim gününün məlumatlarını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Təqvim günü məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CalendarDay'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   put:
+ *     summary: Təqvim gününü yenilə
+ *     tags: [Calendar]
+ *     description: Müəyyən edilmiş təqvim gününün məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               dayOfWeek:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *               events:
+ *                 type: array
+ *               note:
  *                 type: string
  *     responses:
  *       200:
- *         description: Şifrə uğurla dəyişdirildi
+ *         description: Təqvim günü uğurla yeniləndi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   delete:
+ *     summary: Təqvim gününü sil
+ *     tags: [Calendar]
+ *     description: Müəyyən edilmiş təqvim gününü silir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Təqvim günü uğurla silindi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
  */
-router.post("/reset-password", resetPassword);
+router.get("/:id/calendar/:dayId", protect, getCalendarDayById);
+router.put("/:id/calendar/:dayId", protect, updateCalendarDay);
+router.delete("/:id/calendar/:dayId", protect, deleteCalendarDay);
+
+// ===================== 🎯 EVENT ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/calendar/{dayId}/events:
+ *   post:
+ *     summary: Yeni hadisə əlavə et
+ *     tags: [Events]
+ *     description: Təqvim gününə yeni hadisə əlavə edir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Event'
+ *     responses:
+ *       201:
+ *         description: Hadisə uğurla yaradıldı
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   get:
+ *     summary: Bütün hadisələri gətir
+ *     tags: [Events]
+ *     description: Təqvim günündəki bütün hadisələri qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Hadisələr siyahısı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Event'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post("/:id/calendar/:dayId/events", protect, addEvent);
+router.get("/:id/calendar/:dayId/events", protect, getAllEvents);
+
+/**
+ * @swagger
+ * /api/users/{id}/calendar/{dayId}/events/{eventId}:
+ *   get:
+ *     summary: Xüsusi hadisəni gətir
+ *     tags: [Events]
+ *     description: Müəyyən edilmiş hadisənin məlumatlarını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: eventId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Hadisə məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Event'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   put:
+ *     summary: Hadisəni yenilə
+ *     tags: [Events]
+ *     description: Müəyyən edilmiş hadisənin məlumatlarını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: eventId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Event'
+ *     responses:
+ *       200:
+ *         description: Hadisə uğurla yeniləndi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   delete:
+ *     summary: Hadisəni sil
+ *     tags: [Events]
+ *     description: Müəyyən edilmiş hadisəni silir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: dayId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: eventId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Hadisə uğurla silindi
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/calendar/:dayId/events/:eventId", protect, getEventById);
+router.put("/:id/calendar/:dayId/events/:eventId", protect, updateEvent);
+router.delete("/:id/calendar/:dayId/events/:eventId", protect, deleteEvent);
+
+// ===================== 📊 ACCOUNTING ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/entries:
+ *   post:
+ *     summary: Mühasibat yazılışı əlavə et
+ *     tags: [Accounting]
+ *     description: Yeni mühasibat yazılışı əlavə edir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AccountingEntry'
+ *     responses:
+ *       201:
+ *         description: Yazılış uğurla əlavə edildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/AccountingEntry'
+ *                 message:
+ *                   type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   get:
+ *     summary: Bütün yazılışları gətir
+ *     tags: [Accounting]
+ *     description: Bütün mühasibat yazılışlarını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: startDate
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - name: endDate
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - name: accountCode
+ *         in: query
+ *         schema:
+ *           type: string
+ *       - name: type
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [debit, credit]
+ *     responses:
+ *       200:
+ *         description: Yazılışlar siyahısı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AccountingEntry'
+ *                 count:
+ *                   type: number
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post("/:id/accounting/entries", protect, addAccountingEntry);
+router.get("/:id/accounting/entries", protect, getAccountingEntries);
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/balances:
+ *   get:
+ *     summary: Bütün balansları gətir
+ *     tags: [Accounting]
+ *     description: Bütün hesabların cari balanslarını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Balans məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     balances:
+ *                       type: object
+ *                     summary:
+ *                       type: object
+ *                     lastUpdated:
+ *                       type: string
+ *                       format: date-time
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/accounting/balances", protect, getAccountingBalances);
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/balances/{accountCode}:
+ *   get:
+ *     summary: Xüsusi hesab balansı
+ *     tags: [Accounting]
+ *     description: Müəyyən edilmiş hesabın cari balansını qaytarır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: accountCode
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [543, 531, 533, 535]
+ *     responses:
+ *       200:
+ *         description: Hesab balansı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/accounting/balances/:accountCode", protect, getAccountBalance);
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/report:
+ *   get:
+ *     summary: Hesabat yarat
+ *     tags: [Accounting]
+ *     description: Mühasibat hesabatı yaradır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: startDate
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - name: endDate
+ *         in: query
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Hesabat məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/accounting/report", protect, generateAccountingReport);
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/sample:
+ *   post:
+ *     summary: Nümunə əməliyyat yarat
+ *     tags: [Accounting]
+ *     description: Test məqsədli nümunə mühasibat əməliyyatı yaradır
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       201:
+ *         description: Nümunə əməliyyat uğurla yaradıldı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AccountingEntry'
+ *                 message:
+ *                   type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post(
+  "/:id/accounting/sample",
+  protect,
+  createSampleAccountingTransaction
+);
+
+/**
+ * @swagger
+ * /api/users/{id}/accounting/entries/{entryId}:
+ *   put:
+ *     summary: Yazılışı yenilə
+ *     tags: [Accounting]
+ *     description: Müəyyən edilmiş mühasibat yazılışını yeniləyir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: entryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AccountingEntry'
+ *     responses:
+ *       200:
+ *         description: Yazılış uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/AccountingEntry'
+ *                 message:
+ *                   type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ *
+ *   delete:
+ *     summary: Yazılışı sil
+ *     tags: [Accounting]
+ *     description: Müəyyən edilmiş mühasibat yazılışını silir
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: entryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Yazılış uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.put("/:id/accounting/entries/:entryId", protect, updateAccountingEntry);
+router.delete(
+  "/:id/accounting/entries/:entryId",
+  protect,
+  deleteAccountingEntry
+);
+
+// ===================== 📁 COMPANY FILE ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{companyId}/files/upload:
+ *   post:
+ *     summary: Şirkət faylı yüklə
+ *     tags: [Company Files]
+ *     description: Şirkət üçün fayl yükləyir
+ *     parameters:
+ *       - name: companyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               category:
+ *                 type: string
+ *               visibleTo:
+ *                 type: string
+ *               departments:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Fayl uğurla yükləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Fayl seçilməyib
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post(
+  "/:companyId/files/upload",
+  protect,
+  upload.single("file"),
+  uploadCompanyFile
+);
+
+/**
+ * @swagger
+ * /api/users/{companyId}/files:
+ *   get:
+ *     summary: Şirkət fayllarını list et
+ *     tags: [Company Files]
+ *     description: Şirkətin bütün fayllarını list edir
+ *     parameters:
+ *       - name: companyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: category
+ *         in: query
+ *         schema:
+ *           type: string
+ *       - name: search
+ *         in: query
+ *         schema:
+ *           type: string
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Fayllar siyahısı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                 pagination:
+ *                   type: object
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:companyId/files", protect, getCompanyFiles);
+
+/**
+ * @swagger
+ * /api/users/{companyId}/files/{fileId}/download:
+ *   get:
+ *     summary: Faylı download et
+ *     tags: [Company Files]
+ *     description: Şirkət faylını download edir
+ *     parameters:
+ *       - name: companyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: fileId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Fayl məlumatları
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Fayl tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:companyId/files/:fileId/download", protect, downloadCompanyFile);
+
+/**
+ * @swagger
+ * /api/users/{companyId}/files/{fileId}/view:
+ *   get:
+ *     summary: Faylı preview et
+ *     tags: [Company Files]
+ *     description: Şirkət faylını preview edir
+ *     parameters:
+ *       - name: companyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: fileId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Fayl məlumatları
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Fayl tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:companyId/files/:fileId/view", protect, viewCompanyFile);
+
+/**
+ * @swagger
+ * /api/users/{companyId}/files/{fileId}:
+ *   delete:
+ *     summary: Faylı sil
+ *     tags: [Company Files]
+ *     description: Şirkət faylını silir
+ *     parameters:
+ *       - name: companyId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: fileId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Fayl uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *       404:
+ *         description: Fayl tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.delete("/:companyId/files/:fileId", protect, deleteCompanyFile);
 
 export default router;

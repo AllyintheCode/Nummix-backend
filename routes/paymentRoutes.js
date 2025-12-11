@@ -6,76 +6,185 @@ import {
   getNext7DaysSchedule,
 } from "../controllers/PaymentController.js";
 
+import protect from "../middlewares/authMiddleware.js";
 const router = express.Router();
 
 /**
  * @swagger
- * /payments:
+ * tags:
+ *   - name: Payments
+ *     description: Ödənişlər üçün API-lər
+ */
+
+/**
+ * @swagger
+ * /api/payments:
  *   post:
- *     summary: Yeni ödəniş yaratmaq
+ *     summary: Yeni ödəniş əlavə et
+ *     tags: [Payments]
+ *     description: Yeni Payment (ödəmə) yaradaraq verilənlər bazasına əlavə edir.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               amount:
- *                 type: number
- *               date:
- *                 type: string
- *                 format: date
- *               description:
- *                 type: string
+ *             $ref: '#/components/schemas/Payment'
  *     responses:
  *       201:
- *         description: Ödəniş yaradıldı
- */
-router.post("/", createPayment);
-
-/**
- * @swagger
- * /payments:
- *   get:
- *     summary: Bütün ödənişləri gətirmək
- *     responses:
- *       200:
- *         description: Ödəniş siyahısı
- */
-router.get("/", getAllPayments);
-
-/**
- * @swagger
- * /payments/stats:
- *   get:
- *     summary: Ödəniş statistikasını gətirmək
- *     responses:
- *       200:
- *         description: Ödəniş statistik məlumatları
+ *         description: Ödəniş uğurla yaradıldı
  *         content:
  *           application/json:
- *             example:
- *               totalPayments: 100
- *               totalAmount: 50000
+ *             schema:
+ *               $ref: '#/components/schemas/Payment'
+ *       400:
+ *         description: Yanlış məlumat göndərildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Validation failed"
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/stats", getPaymentStats);
+
+router.post("/", protect, createPayment);
 
 /**
  * @swagger
- * /payments/schedule:
+ * /api/payments:
  *   get:
- *     summary: Növbəti 7 gün üçün ödəniş cədvəli
+ *     summary: Bütün ödənişləri gətir
+ *     tags: [Payments]
+ *     description: Verilənlər bazasındakı bütün Payment (ödəmə) qeydlərini qaytarır.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
  *     responses:
  *       200:
- *         description: 7 günlük ödəniş planı
+ *         description: Ödənişlər uğurla gətirildi
  *         content:
  *           application/json:
- *             example:
- *               - date: "2025-11-15"
- *                 amount: 1000
- *               - date: "2025-11-16"
- *                 amount: 1500
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Payment'
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
  */
-router.get("/schedule", getNext7DaysSchedule);
+
+router.get("/", protect, getAllPayments);
+
+/**
+ * @swagger
+ * /api/payments/stats:
+ *   get:
+ *     summary: Ödəniş və alacaqlar üzrə statistik məlumatlar
+ *     tags: [Payments]
+ *     description: Ödənişlərin (outflow) və alacaqların (receipt) toplam məbləğini və gecikmiş ödənişləri/alacaqları göstərir.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
+ *     responses:
+ *       200:
+ *         description: Ödəniş statistikası uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalOutflow:
+ *                   type: number
+ *                   example: 12000
+ *                 totalReceivable:
+ *                   type: number
+ *                   example: 15000
+ *                 overduePayments:
+ *                   type: number
+ *                   example: 3
+ *                 overdueReceivables:
+ *                   type: number
+ *                   example: 2
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+
+router.get("/stats", protect, getPaymentStats);
+
+/**
+ * @swagger
+ * /api/payments/schedule
+ *   get:
+ *     summary: Növbəti 7 gün üçün planlaşdırılmış ödənişlər və gəlirlər
+ *     tags: [Payments]
+ *     description: Növbəti 7 gün ərzində ödənişlər və alacaqlar üzrə planlaşdırılmış məlumatları göstərir. Gecikmiş ödənişlər "Təcili" olaraq işarələnir.
+ *     security:
+ *       - bearerAuth: []   # JWT tələb olunur
+ *     responses:
+ *       200:
+ *         description: Növbəti 7 günün ödəniş/gəlir planı uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   date:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2025-12-15T00:00:00.000Z"
+ *                   supplierName:
+ *                     type: string
+ *                     example: "ABC Supplier"
+ *                   type:
+ *                     type: string
+ *                     example: "outflow"
+ *                   amount:
+ *                     type: number
+ *                     example: 5000
+ *                   urgent:
+ *                     type: string
+ *                     nullable: true
+ *                     example: "Təcili"
+ *       500:
+ *         description: Server xətası baş verdi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+
+router.get("/schedule", protect, getNext7DaysSchedule);
 
 export default router;
