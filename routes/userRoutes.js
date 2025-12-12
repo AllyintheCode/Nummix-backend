@@ -44,7 +44,7 @@ import {
   deleteCompanyFile,
 } from "../controllers/userController.js";
 import protect from "../middlewares/authMiddleware.js";
-import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
+import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
 import { upload } from "../controllers/userController.js";
 import rateLimit from "express-rate-limit";
 
