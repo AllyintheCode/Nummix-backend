@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeOrderStatus,
     createOrder,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllOrders);
-router.get("/:id", protect, getSingleOrder);
-router.post("/", protect, createOrder);
-router.patch("/:id", protect, editOrder);
-router.patch("/:id/status", protect, changeOrderStatus);
+router.get("/", getAllOrders);
+router.get("/:id", getSingleOrder);
+router.post("/", createOrder);
+router.patch("/:id", editOrder);
+router.patch("/:id/status", changeOrderStatus);
 
 export default router;

@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeWarehouseStatus,
     createWarehouse,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllWarehouses);
-router.get("/:id", protect, getSingleWarehouse);
-router.post("/", protect, createWarehouse);
-router.patch("/:id", protect, editWarehouse);
-router.patch("/:id/status", protect, changeWarehouseStatus);
+router.get("/", getAllWarehouses);
+router.get("/:id", getSingleWarehouse);
+router.post("/", createWarehouse);
+router.patch("/:id", editWarehouse);
+router.patch("/:id/status", changeWarehouseStatus);
 
 export default router;

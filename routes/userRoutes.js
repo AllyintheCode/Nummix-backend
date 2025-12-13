@@ -1,14 +1,14 @@
 import express from "express";
 import {
-  registerUser,
-  loginUser,
-  getProfile,
-  verifyOtp,
-  resendOtp,
-  forgotPassword,
-  resetPassword,
+    registerUser,
+    loginUser,
+    getProfile,
+    verifyOtp,
+    resendOtp,
+    forgotPassword,
+    resetPassword,
 } from "../controllers/userController.js";
-import protect from "../middlewares/authMiddleware.js";
+
 import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
 
 const router = express.Router();

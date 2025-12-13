@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeProductStatus,
     createProduct,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllProducts);
-router.get("/:id", protect, getSingleProduct);
-router.post("/", protect, createProduct);
-router.patch("/:id", protect, editProduct);
-router.patch("/:id/status", protect, changeProductStatus);
+router.get("/", getAllProducts);
+router.get("/:id", getSingleProduct);
+router.post("/", createProduct);
+router.patch("/:id", editProduct);
+router.patch("/:id/status", changeProductStatus);
 
 export default router;

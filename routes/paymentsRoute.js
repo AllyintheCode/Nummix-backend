@@ -1,15 +1,19 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
-import { changePaymentStatus, createPayment, editPayment, getALLPayments, getSinglePayment } from "../controllers/paymentsController.js";
+import {
+    changePaymentStatus,
+    createPayment,
+    editPayment,
+    getALLPayments,
+    getSinglePayment,
+} from "../controllers/paymentsController.js";
 
 const router = express.Router();
 
-router.get("/", protect, getALLPayments);
-router.get("/:id", protect, getSinglePayment);
-router.post("/", protect, createPayment);
-router.patch("/:id", protect, editPayment);
-router.patch("/:id/status", protect, changePaymentStatus);
+router.get("/", getALLPayments);
+router.get("/:id", getSinglePayment);
+router.post("/", createPayment);
+router.patch("/:id", editPayment);
+router.patch("/:id/status", changePaymentStatus);
 
 export default router;

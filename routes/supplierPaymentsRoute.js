@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeSupplierPaymentStatus,
     createSupplierPayment,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllSupplierPayments);
-router.get("/:id", protect, getSingleSupplierPayment);
-router.post("/", protect, createSupplierPayment);
-router.patch("/:id", protect, editSupplierPayment);
-router.patch("/:id/status", protect, changeSupplierPaymentStatus);
+router.get("/", getAllSupplierPayments);
+router.get("/:id", getSingleSupplierPayment);
+router.post("/", createSupplierPayment);
+router.patch("/:id", editSupplierPayment);
+router.patch("/:id/status", changeSupplierPaymentStatus);
 
 export default router;

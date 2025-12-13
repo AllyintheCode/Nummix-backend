@@ -1,5 +1,5 @@
 import express from "express";
-import protect from "../middlewares/authMiddleware.js";
+
 import {
     createDelivery,
     createGRN,
@@ -9,9 +9,9 @@ import {
 
 const router = express.Router();
 
-router.post("/grn", protect, createGRN);
-router.post("/delivery", protect, createDelivery);
-router.post("/transfer", protect, createTransfer);
-router.get("/history", protect, getWarehouseHistory);
+router.post("/grn", createGRN);
+router.post("/delivery", createDelivery);
+router.post("/transfer", createTransfer);
+router.get("/history", getWarehouseHistory);
 
 export default router;

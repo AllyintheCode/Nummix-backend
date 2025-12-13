@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeAgreementStatus,
     createAgreement,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllAgreements);
-router.get("/:id", protect, getSingleAgreement);
-router.post("/", protect, createAgreement);
-router.patch("/:id", protect, editAgreement);
-router.patch("/:id/status", protect, changeAgreementStatus);
+router.get("/", getAllAgreements);
+router.get("/:id", getSingleAgreement);
+router.post("/", createAgreement);
+router.patch("/:id", editAgreement);
+router.patch("/:id/status", changeAgreementStatus);
 
 export default router;

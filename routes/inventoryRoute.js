@@ -1,7 +1,5 @@
 import express from "express";
 
-import protect from "../middlewares/authMiddleware.js";
-
 import {
     changeInventoryStatus,
     createInventory,
@@ -12,10 +10,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", protect, getAllInventory);
-router.get("/:id", protect, getSingleInventory);
-router.post("/", protect, createInventory);
-router.patch("/:id", protect, editInventory);
-router.patch("/:id/status", protect, changeInventoryStatus);
+router.get("/", getAllInventory);
+router.get("/:id", getSingleInventory);
+router.post("/", createInventory);
+router.patch("/:id", editInventory);
+router.patch("/:id/status", changeInventoryStatus);
 
 export default router;
