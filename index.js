@@ -32,44 +32,38 @@ dotenv.config();
 
 const app = express();
 
-// Middlewares
+// --- TRUST PROXY (Render üçün) ---
+app.set("trust proxy", 1); // bu X-Forwarded-For header üçün mütləqdir
+
+// --- Middlewares ---
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Rate limiter
-const limiter = rateLimit({
+// --- Rate limiter (app initialization) ---
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 dəqiqə
   max: 10, // hər IP maksimum 10 sorğu
-  message: "Çox sorğu göndərdiniz, bir az gözləyin",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Çox sorğu göndərdiniz, bir az gözləyin" },
 });
 
-// Test route
+// --- Test route ---
 app.get("/", (req, res) => {
   res.send("Nummix backend işləyir 🚀");
 });
 
-// Rate limiter qeydiyyata
-app.use("/api/users/register", limiter);
-
+// --- Swagger ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const options = {
   definition: {
     openapi: "3.0.0",
-    info: {
-      title: "My API",
-      version: "1.0.0",
-    },
+    info: { title: "My API", version: "1.0.0" },
     components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
-        },
-      },
+      securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
     },
     security: [{ bearerAuth: [] }],
   },
@@ -77,10 +71,12 @@ const options = {
 };
 
 const swaggerSpec = swaggerJsdoc(options);
-
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Routes
+// --- Routes ---
+// PUBLIC route üçün rate limiter tətbiq edirik
+app.use("/api/users/register", authLimiter);
+
 app.use("/api/users", userRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/transactions", transactionRoutes);
@@ -102,9 +98,9 @@ app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
 
-// DB connect
+// --- DB connect ---
 connectDB();
 
-// Server
+// --- Server ---
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir`));
+app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir 🚀`));
