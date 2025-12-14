@@ -48,7 +48,6 @@ import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
 import { upload } from "../controllers/userController.js";
 import rateLimit from "express-rate-limit";
 
-
 const router = express.Router();
 
 /**
@@ -397,10 +396,12 @@ router.post("/register", rateLimit, registerUser);
  *         description: Giriş məlumatları yanlış
  *       500:
  *         description: Daxili server xətası
+*/
 
 router.post("/login", loginLimiter, loginUser);
 
 /**
+ *
  * @swagger
  * /api/users/verify-otp:
  *   post:
@@ -578,7 +579,6 @@ router.post("/resend-otp", otpLimiter, resendOtp);
  *                   example: "Server xətası"
  */
 router.post("/forgot-password", forgotPassword);
-
 
 /**
  * @swagger
