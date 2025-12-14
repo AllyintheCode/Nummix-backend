@@ -48,9 +48,11 @@ import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
 import { upload } from "../controllers/userController.js";
 import rateLimit from "express-rate-limit";
 
+
 const router = express.Router();
 
 /**
+
  * @swagger
 
  * tags:
@@ -395,7 +397,7 @@ router.post("/register", rateLimit, registerUser);
  *         description: Giriş məlumatları yanlış
  *       500:
  *         description: Daxili server xətası
- */
+
 router.post("/login", loginLimiter, loginUser);
 
 /**
@@ -577,6 +579,7 @@ router.post("/resend-otp", otpLimiter, resendOtp);
  */
 router.post("/forgot-password", forgotPassword);
 
+
 /**
  * @swagger
  * /api/users/reset-password:
@@ -584,6 +587,7 @@ router.post("/forgot-password", forgotPassword);
  *     summary: Şifrəni yeniləmək
  *     tags: [Authentication]
  *     description: İstifadəçi email və OTP təqdim edərək şifrəsini yeniləyə bilər.
+
  *     requestBody:
  *       required: true
  *       content:
@@ -641,8 +645,32 @@ router.post("/forgot-password", forgotPassword);
  *                 message:
  *                   type: string
  *                   example: "Server xətası"
+
  */
 router.post("/reset-password", resetPassword);
+/**
+ * @openapi
+ * /api/users/reset-password:
+ *   post:
+ *     tags: [Users]
+ *     summary: Reset password with token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: Invalid or expired token
+ */
 
 // ===================== 👥 USER CRUD ROUTES =====================
 
