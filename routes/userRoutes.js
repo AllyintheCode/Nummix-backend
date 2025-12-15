@@ -10,6 +10,7 @@ import {
 } from "../controllers/userController.js";
 
 import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
+import protect from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
