@@ -78,7 +78,6 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // --- Routes ---
 // PUBLIC route üçün rate limiter tətbiq edirik
 app.use("/api/users/register", authLimiter);
-
 app.use("/api/users", userRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/transactions", transactionRoutes);
