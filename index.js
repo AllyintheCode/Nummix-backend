@@ -11,7 +11,6 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import generalLedgerRoutes from "./routes/generalLedgerRoutes.js";
 import payrollRoutes from "./routes/payrollroute.js";
 import assetsRoutes from "./routes/assets.js";
-
 import rateLimit from "express-rate-limit";
 import { connectDB } from "./config/db.js";
 

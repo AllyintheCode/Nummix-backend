@@ -11,13 +11,20 @@ const protect = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
       req.user = await User.findById(decoded.id).select("-password");
+
+      if (!req.user) {
+        return res.status(401).json({ message: "User tapılmadı" });
+      }
+
       next();
     } catch (error) {
-      res.status(401).json({ message: "Token düzgün deyil" });
+      console.error("JWT verification error:", error);
+      return res.status(401).json({ message: "Token düzgün deyil" });
     }
   } else {
-    res.status(401).json({ message: "Token yoxdur, giriş qadağandır" });
+    return res.status(401).json({ message: "Token yoxdur, giriş qadağandır" });
   }
 };
 

@@ -42,11 +42,13 @@ import {
   downloadCompanyFile,
   viewCompanyFile,
   deleteCompanyFile,
+  refreshAccessToken,
 } from "../controllers/userController.js";
 import protect from "../middlewares/authMiddleware.js";
-import { loginLimiter, otpLimiter } from "../middlewares/rateLImit.js";
-import { upload } from "../controllers/userController.js";
 import rateLimit from "express-rate-limit";
+import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
+import { adminOnly } from "../middlewares/adminMiddleware.js";
+import { upload } from "../controllers/userController.js";
 
 const router = express.Router();
 
@@ -644,6 +646,67 @@ router.post("/forgot-password", forgotPassword);
  */
 router.post("/reset-password", resetPassword);
 
+/**
+ * @swagger
+ * /api/users/refresh-token:
+ *   post:
+ *     summary: Refresh token ilə yeni access token əldə etmək
+ *     tags: [Authentication]
+ *     description: İstifadəçi refresh token təqdim edərək yeni access token ala bilər.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *     responses:
+ *       200:
+ *         description: Yeni access token uğurla yaradıldı
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *       401:
+ *         description: Token düzgün deyil və ya təqdim edilməyib
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Token düzgün deyil və ya təqdim edilməyib"
+ *       403:
+ *         description: Refresh token etibarsız və ya vaxtı bitib
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Refresh token etibarsız və ya vaxtı bitib"
+ *       500:
+ *         description: Daxili server xətası
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server xətası"
+ */
+router.post("/refresh-token", refreshAccessToken);
+
 // ===================== 👥 USER CRUD ROUTES =====================
 
 /**
@@ -665,7 +728,7 @@ router.post("/reset-password", resetPassword);
  *       500:
  *         description: Daxili server xətası
  */
-router.get("/", protect, getAllUsers);
+router.get("/", protect, adminOnly, getAllUsers);
 
 /**
  * @swagger
@@ -799,9 +862,9 @@ router.get("/profile", protect, getProfile);
  *       500:
  *         description: Daxili server xətası
  */
-router.get("/:id", protect, getUserById);
-router.put("/:id", protect, updateUser);
-router.delete("/:id", protect, deleteUser);
+router.get("/:id", protect, adminOnly, getUserById);
+router.put("/:id", protect, adminOnly, updateUser);
+router.delete("/:id", protect, adminOnly, deleteUser);
 
 // ===================== 💰 FINANCIAL ROUTES =====================
 

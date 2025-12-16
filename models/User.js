@@ -406,6 +406,11 @@ const userSchema = new mongoose.Schema(
     resetOtpExpires: { type: Date },
     failedLoginAttempts: { type: Number, default: 0 },
     lockUntil: { type: Date },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     monthly_active_employees: {
       January: { type: Number, default: 0 },
       February: { type: Number, default: 0 },

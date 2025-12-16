@@ -1,12 +1,14 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
-import generateToken from "../utils/generateToken.js";
 import sendEmail from "../utils/sendEmail.js";
 import TaxCalculationService from "../services/taxCalculationService.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+} from "../utils/generateToken.js";
 
-
-// ✅ Yeni istifadəçi qeydiyyatı
 const OTP_EXPIRE_MIN = 5; // OTP 5 dəqiqə sonra bitir
+// ✅ Yeni istifadəçi qeydiyyatı
 
 export const registerUser = async (req, res) => {
   try {
@@ -18,14 +20,13 @@ export const registerUser = async (req, res) => {
         .status(400)
         .json({ message: "Bu email artıq istifadə olunub" });
 
-
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     const user = await User.create({
       fullName,
       companyName,
       email,
-      password,
+      password, // ⚠️ plain
       otp: otpCode,
       otpExpires: new Date(Date.now() + OTP_EXPIRE_MIN * 60 * 1000),
       isVerified: false,
@@ -34,23 +35,18 @@ export const registerUser = async (req, res) => {
     await sendEmail(
       email,
       "Nummix OTP Təsdiqləmə",
-      `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
+      `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}`
     );
 
     res.status(201).json({
       _id: user._id,
-      fullName: user.fullName,
-      companyName: user.companyName,
       email: user.email,
-      token: generateToken(user._id),
-      message:
-        "Qeydiyyat uğurla tamamlandı. Emailinizə göndərilən OTP kodunu təsdiqləyin.",
+      message: "OTP email-ə göndərildi",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // OTP təsdiqləmə
 export const verifyOtp = async (req, res) => {
@@ -114,6 +110,7 @@ export const resendOtp = async (req, res) => {
 };
 
 // User login + login bloklama
+
 // ✅ İstifadəçi girişi
 
 export const loginUser = async (req, res) => {
@@ -131,6 +128,11 @@ export const loginUser = async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log({
+      inputPassword: password,
+      dbPassword: user.password,
+      isMatch,
+    });
     if (!isMatch) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
 
@@ -150,18 +152,22 @@ export const loginUser = async (req, res) => {
     if (!user.isVerified)
       return res.status(401).json({ message: "Email təsdiqlənməyib." });
 
+    // Token-lər
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+
     res.json({
       _id: user._id,
       fullName: user.fullName,
       companyName: user.companyName,
       email: user.email,
-      token: generateToken(user._id),
+      accessToken,
+      refreshToken,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // Qorunan profil route
 export const getProfile = async (req, res) => {
@@ -179,7 +185,7 @@ export const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
 
-    const resetOtp = Math.floor(100000 + Math.random() * 900000);
+    const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetOtp = resetOtp;
     user.resetOtpExpires = new Date(Date.now() + OTP_EXPIRE_MIN * 60 * 1000);
     await user.save();
@@ -196,31 +202,52 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
+// ✅ Refresh token ilə yeni access token əldə et
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token)
+      return res.status(401).json({ message: "Refresh token tələb olunur" });
+
+    const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+
+    const newAccessToken = generateAccessToken(user._id);
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    res.status(401).json({ message: "Refresh token etibarsızdır" });
+  }
+};
+
 // --- Reset Password ---
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
+
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
 
     if (!user.resetOtp || user.resetOtpExpires < Date.now())
       return res
         .status(400)
-        .json({ message: "OTP etibarsız və ya müddəti bitib" });
-        if (user.resetOtp != otp)
-          return res.status(400).json({ message: "OTP yanlışdır" });
-        
-        user.password = await bcrypt.hash(newPassword, 10);
-        user.resetOtp = undefined;
-        user.resetOtpExpires = undefined;
-        await user.save();
-        
-        res.json({ message: "Şifrə uğurla yeniləndi ✅" });
-      } catch (error) {
-        res.status(500).json({ message: error.message });
-      }
-      };
-        
+        .json({ message: "OTP etibarsız və ya vaxtı bitib" });
+
+    if (user.resetOtp !== otp)
+      return res.status(400).json({ message: "OTP yanlışdır" });
+
+    user.password = newPassword; // ⚠️ HASH ETMƏ
+    user.resetOtp = undefined;
+    user.resetOtpExpires = undefined;
+
+    await user.save(); // pre("save") özü hash edəcək
+
+    res.json({ message: "Şifrə uğurla yeniləndi ✅" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ✅ Bütün istifadəçiləri getir
 export const getAllUsers = async (req, res) => {
   try {
@@ -247,25 +274,32 @@ export const getUserById = async (req, res) => {
 // ✅ İstifadəçi məlumatlarını yenilə
 export const updateUser = async (req, res) => {
   try {
-    const { password, ...updateData } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
 
-    // Şifrə varsa, hash et
-    if (password) {
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
+    if (
+      req.user._id.toString() !== user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Siz yalnız öz profilinizi yeniləyə bilərsiniz" });
+    }
+    if (req.body.password) {
+      user.password = req.body.password; // ⚠️ plain
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).select("-password");
+    user.fullName = req.body.fullName ?? user.fullName;
+    user.companyName = req.body.companyName ?? user.companyName;
+    user.email = req.body.email ?? user.email;
 
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
+    await user.save();
 
-    res.json(user);
+    res.json({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -278,12 +312,18 @@ export const deleteUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
+    // ✅ Admin yalnız başqalarını silə bilər
+    if (req.user._id.toString() === user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Öz hesabınızı silə bilməzsiniz" });
+    }
+
     res.json({ message: "İstifadəçi silindi" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 // ===================== 💰 YENİ VERGİ VƏ ÖDƏNİŞ FUNKSİYALARI =====================
 
 // ✅ Əməkhaqqı fondu yenilə
@@ -296,7 +336,9 @@ export const updateSalaryFund = async (req, res) => {
 
     // ✅ User ID yoxlanışı
     if (!req.params.id) {
-      return res.status(400).json({ message: "İstifadəçi ID-si təqdim edilməyib" });
+      return res
+        .status(400)
+        .json({ message: "İstifadəçi ID-si təqdim edilməyib" });
     }
 
     const user = await User.findById(req.params.id);
@@ -306,18 +348,30 @@ export const updateSalaryFund = async (req, res) => {
     }
 
     // ✅ AY YOXLANIŞI
-    const validMonths = ['January', 'February', 'March', 'April', 'May', 'June', 
-                        'July', 'August', 'September', 'October', 'November', 'December'];
-    
-    const normalizedMonth = validMonths.find(m => 
-      m.toLowerCase() === month.toLowerCase()
+    const validMonths = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const normalizedMonth = validMonths.find(
+      (m) => m.toLowerCase() === month.toLowerCase()
     );
 
     if (!normalizedMonth) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Yanlış ay adı",
         availableMonths: validMonths,
-        receivedMonth: month
+        receivedMonth: month,
       });
     }
 
@@ -328,9 +382,9 @@ export const updateSalaryFund = async (req, res) => {
       console.log("🟢 Tax calculation successful:", companyTaxes);
     } catch (taxError) {
       console.error("🔴 Tax calculation error:", taxError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Vergi hesablanmasında xəta",
-        error: taxError.message 
+        error: taxError.message,
       });
     }
 
@@ -346,10 +400,11 @@ export const updateSalaryFund = async (req, res) => {
     user.company_taxes.dsmf[normalizedMonth] = companyTaxes.employerTaxes.dsmf;
     user.company_taxes.ish[normalizedMonth] = companyTaxes.employerTaxes.ish;
     user.company_taxes.its[normalizedMonth] = companyTaxes.employerTaxes.its;
-    user.company_taxes.total_company_taxes[normalizedMonth] = companyTaxes.totalEmployerTaxes;
+    user.company_taxes.total_company_taxes[normalizedMonth] =
+      companyTaxes.totalEmployerTaxes;
 
     // Cari ay ümumi məlumatları yenilə
-    const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
+    const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
     if (normalizedMonth === currentMonth) {
       user.current_month_total.salary_fund = amount;
       user.current_month_total.company_taxes = companyTaxes.totalEmployerTaxes;
@@ -367,15 +422,14 @@ export const updateSalaryFund = async (req, res) => {
         dsmf: user.company_taxes.dsmf[normalizedMonth],
         ish: user.company_taxes.ish[normalizedMonth],
         its: user.company_taxes.its[normalizedMonth],
-        total: user.company_taxes.total_company_taxes[normalizedMonth]
+        total: user.company_taxes.total_company_taxes[normalizedMonth],
       },
-      message: "Əməkhaqqı fondu uğurla yeniləndi"
+      message: "Əməkhaqqı fondu uğurla yeniləndi",
     });
-
   } catch (error) {
     console.error("🔴 Salary fund update error:", error);
-    res.status(500).json({ 
-      message: error.message
+    res.status(500).json({
+      message: error.message,
     });
   }
 };
@@ -397,17 +451,16 @@ export const updateCompanyTaxes = async (req, res) => {
     user.company_taxes.dsmf[month] = dsmf || user.company_taxes.dsmf[month];
     user.company_taxes.ish[month] = ish || user.company_taxes.ish[month];
     user.company_taxes.its[month] = its || user.company_taxes.its[month];
-    
+
     // Ümumi vergi hesabla
-    user.company_taxes.total_company_taxes[month] = 
-      user.company_taxes.dsmf[month] + 
-      user.company_taxes.ish[month] + 
+    user.company_taxes.total_company_taxes[month] =
+      user.company_taxes.dsmf[month] +
+      user.company_taxes.ish[month] +
       user.company_taxes.its[month];
 
     await user.save();
 
     res.json(user.company_taxes);
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -416,14 +469,16 @@ export const updateCompanyTaxes = async (req, res) => {
 // ✅ İşçi axını məlumatlarını gətir
 export const getEmployeeFlowData = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("monthly_employee_flow employee_flow_history");
+    const user = await User.findById(req.params.id).select(
+      "monthly_employee_flow employee_flow_history"
+    );
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
     res.json({
       monthly_stats: user.monthly_employee_flow,
-      history: user.employee_flow_history
+      history: user.employee_flow_history,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -442,13 +497,13 @@ export const updateEmployeeFlowData = async (req, res) => {
 
     if (month && type) {
       // Aylıq statistikaları yenilə
-      if (type === 'new_hires') {
+      if (type === "new_hires") {
         user.monthly_employee_flow[month].new_hires += count;
         user.monthly_employee_flow[month].net_change += count;
-      } else if (type === 'terminations') {
+      } else if (type === "terminations") {
         user.monthly_employee_flow[month].terminations += count;
         user.monthly_employee_flow[month].net_change -= count;
-      } else if (type === 'resignations') {
+      } else if (type === "resignations") {
         user.monthly_employee_flow[month].resignations += count;
         user.monthly_employee_flow[month].net_change -= count;
       }
@@ -463,7 +518,7 @@ export const updateEmployeeFlowData = async (req, res) => {
 
     res.json({
       monthly_stats: user.monthly_employee_flow,
-      history: user.employee_flow_history
+      history: user.employee_flow_history,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -473,16 +528,28 @@ export const updateEmployeeFlowData = async (req, res) => {
 // ✅ Ödəniş ümumi baxışını gətir
 export const getPaymentOverview = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("employee_payments employer_payments current_month_total");
+    const user = await User.findById(req.params.id).select(
+      "employee_payments employer_payments current_month_total"
+    );
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
     // Ödəniş statistikalarını hesabla
-    const totalEmployeePayments = user.employee_payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const totalEmployerPayments = user.employer_payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const completedPayments = user.employee_payments.filter(p => p.status === 'completed').length;
-    const pendingPayments = user.employee_payments.filter(p => p.status === 'pending').length;
+    const totalEmployeePayments = user.employee_payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+    const totalEmployerPayments = user.employer_payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0
+    );
+    const completedPayments = user.employee_payments.filter(
+      (p) => p.status === "completed"
+    ).length;
+    const pendingPayments = user.employee_payments.filter(
+      (p) => p.status === "pending"
+    ).length;
 
     res.json({
       summary: {
@@ -491,12 +558,17 @@ export const getPaymentOverview = async (req, res) => {
         total_payments: totalEmployeePayments + totalEmployerPayments,
         completed_payments: completedPayments,
         pending_payments: pendingPayments,
-        payment_success_rate: user.employee_payments.length > 0 ? 
-          (completedPayments / user.employee_payments.length * 100).toFixed(2) : 0
+        payment_success_rate:
+          user.employee_payments.length > 0
+            ? (
+                (completedPayments / user.employee_payments.length) *
+                100
+              ).toFixed(2)
+            : 0,
       },
       current_month: user.current_month_total,
       recent_employee_payments: user.employee_payments.slice(-5).reverse(),
-      recent_employer_payments: user.employer_payments.slice(-5).reverse()
+      recent_employer_payments: user.employer_payments.slice(-5).reverse(),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -509,19 +581,22 @@ export const getPaymentOverview = async (req, res) => {
 export const addCalendarDay = async (req, res) => {
   try {
     const { date, dayOfWeek, status, events, note } = req.body;
-    
+
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
     // Eyni tarixli gün varmı yoxla
-    const existingDay = user.calendar.find(day => 
-      new Date(day.date).toDateString() === new Date(date).toDateString()
+    const existingDay = user.calendar.find(
+      (day) =>
+        new Date(day.date).toDateString() === new Date(date).toDateString()
     );
 
     if (existingDay) {
-      return res.status(400).json({ message: "Bu tarix üçün gün artıq mövcuddur" });
+      return res
+        .status(400)
+        .json({ message: "Bu tarix üçün gün artıq mövcuddur" });
     }
 
     user.calendar.push({ date, dayOfWeek, status, events, note });
@@ -725,7 +800,7 @@ export const getAllEvents = async (req, res) => {
     if (!calendarDay) {
       return res.status(404).json({ message: "Calendar günü tapılmadı" });
     }
-    
+
     res.json(calendarDay.events);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -739,11 +814,10 @@ export const updateFinancialData = async (req, res) => {
   try {
     const financialData = req.body;
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      financialData,
-      { new: true, runValidators: true }
-    ).select("-password");
+    const user = await User.findByIdAndUpdate(req.params.id, financialData, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
 
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
@@ -783,7 +857,8 @@ import AccountingService from "../services/accountingService.js";
 // ✅ MÜHASİBAT YAZILIŞI ƏLAVƏ ET
 export const addAccountingEntry = async (req, res) => {
   try {
-    const { accountCode, amount, type, description, documentNumber, date } = req.body;
+    const { accountCode, amount, type, description, documentNumber, date } =
+      req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -798,13 +873,16 @@ export const addAccountingEntry = async (req, res) => {
 
     // Validation
     const validation = AccountingService.validateAccountingEntry({
-      accountCode, amount, type, documentNumber
+      accountCode,
+      amount,
+      type,
+      documentNumber,
     });
-    
+
     if (!validation.isValid) {
-      return res.status(400).json({ 
-        message: "Validation xətası", 
-        errors: validation.errors 
+      return res.status(400).json({
+        message: "Validation xətası",
+        errors: validation.errors,
       });
     }
 
@@ -816,20 +894,20 @@ export const addAccountingEntry = async (req, res) => {
       description,
       documentNumber,
       date: date || new Date(),
-      status: 'posted'
+      status: "posted",
     };
 
     user.accountingEntries.push(newEntry);
-    
+
     // Aylıq statistikaları yenilə
     user.updateMonthlyAccounting(newEntry);
-    
+
     await user.save();
 
     res.status(201).json({
       success: true,
       data: newEntry,
-      message: "Mühasibat yazılışı uğurla əlavə edildi"
+      message: "Mühasibat yazılışı uğurla əlavə edildi",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -840,7 +918,7 @@ export const addAccountingEntry = async (req, res) => {
 export const getAccountingEntries = async (req, res) => {
   try {
     const { startDate, endDate, accountCode, type } = req.query;
-    
+
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
@@ -850,16 +928,20 @@ export const getAccountingEntries = async (req, res) => {
 
     // Filterləmə
     if (startDate) {
-      entries = entries.filter(entry => new Date(entry.date) >= new Date(startDate));
+      entries = entries.filter(
+        (entry) => new Date(entry.date) >= new Date(startDate)
+      );
     }
     if (endDate) {
-      entries = entries.filter(entry => new Date(entry.date) <= new Date(endDate));
+      entries = entries.filter(
+        (entry) => new Date(entry.date) <= new Date(endDate)
+      );
     }
     if (accountCode) {
-      entries = entries.filter(entry => entry.accountCode === accountCode);
+      entries = entries.filter((entry) => entry.accountCode === accountCode);
     }
     if (type) {
-      entries = entries.filter(entry => entry.type === type);
+      entries = entries.filter((entry) => entry.type === type);
     }
 
     // Sıralama (ən yeni üstə)
@@ -868,7 +950,7 @@ export const getAccountingEntries = async (req, res) => {
     res.json({
       success: true,
       data: entries,
-      count: entries.length
+      count: entries.length,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -887,15 +969,17 @@ export const getAccountingBalances = async (req, res) => {
     user.updateAccountingBalances();
     await user.save();
 
-    const balances = AccountingService.calculateAllBalances(user.accountingEntries);
+    const balances = AccountingService.calculateAllBalances(
+      user.accountingEntries
+    );
 
     res.json({
       success: true,
       data: {
         balances: balances.balances,
         summary: balances.summary,
-        lastUpdated: new Date()
-      }
+        lastUpdated: new Date(),
+      },
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -917,11 +1001,14 @@ export const getAccountBalance = async (req, res) => {
       return res.status(404).json({ message: "Hesab kodu tapılmadı" });
     }
 
-    const balance = AccountingService.calculateAccountBalance(user.accountingEntries, accountCode);
+    const balance = AccountingService.calculateAccountBalance(
+      user.accountingEntries,
+      accountCode
+    );
 
     res.json({
       success: true,
-      data: balance
+      data: balance,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -939,14 +1026,14 @@ export const generateAccountingReport = async (req, res) => {
     }
 
     const report = AccountingService.generateAccountingReport(
-      user.accountingEntries, 
-      startDate, 
+      user.accountingEntries,
+      startDate,
       endDate
     );
 
     res.json({
       success: true,
-      data: report
+      data: report,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -962,8 +1049,8 @@ export const createSampleAccountingTransaction = async (req, res) => {
     }
 
     const sampleEntries = AccountingService.createSampleTransaction();
-    
-    sampleEntries.forEach(entry => {
+
+    sampleEntries.forEach((entry) => {
       user.accountingEntries.push(entry);
       user.updateMonthlyAccounting(entry);
     });
@@ -973,7 +1060,7 @@ export const createSampleAccountingTransaction = async (req, res) => {
     res.status(201).json({
       success: true,
       data: sampleEntries,
-      message: "Nümunə mühasibat əməliyyatı uğurla yaradıldı"
+      message: "Nümunə mühasibat əməliyyatı uğurla yaradıldı",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -990,7 +1077,9 @@ export const deleteAccountingEntry = async (req, res) => {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
-    const entryIndex = user.accountingEntries.findIndex(entry => entry._id.toString() === entryId);
+    const entryIndex = user.accountingEntries.findIndex(
+      (entry) => entry._id.toString() === entryId
+    );
     if (entryIndex === -1) {
       return res.status(404).json({ message: "Yazılış tapılmadı" });
     }
@@ -1000,7 +1089,7 @@ export const deleteAccountingEntry = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Mühasibat yazılışı uğurla silindi"
+      message: "Mühasibat yazılışı uğurla silindi",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1029,15 +1118,15 @@ export const updateAccountingEntry = async (req, res) => {
     res.json({
       success: true,
       data: entry,
-      message: "Mühasibat yazılışı uğurla yeniləndi"
+      message: "Mühasibat yazılışı uğurla yeniləndi",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 // controllers/companyFileController.js
-import multer from 'multer';
-import CompanyFile from '../models/companyFileModel.js';
+import multer from "multer";
+import CompanyFile from "../models/companyFileModel.js";
 
 // Multer konfiqurasiyası
 const storage = multer.memoryStorage();
@@ -1048,33 +1137,37 @@ export const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     const allowedMimeTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'image/jpeg', 'image/png', 'image/jpg', 'image/gif',
-      'text/plain',
-      'application/zip',
-      'application/x-rar-compressed'
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+      "image/gif",
+      "text/plain",
+      "application/zip",
+      "application/x-rar-compressed",
     ];
-    
+
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Destəklənməyən fayl formatı'), false);
+      cb(new Error("Destəklənməyən fayl formatı"), false);
     }
-  }
+  },
 });
 
 // ✅ ŞİRKƏT ÜÇÜN FAYL YÜKLƏMƏ - DÜZƏLİŞ EDİLMİŞ VERSİYA
 export const uploadCompanyFile = async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { title, description, category, visibleTo, departments, tags } = req.body;
-    
+    const { title, description, category, visibleTo, departments, tags } =
+      req.body;
+
     // uploadedBy-i düzəldirik
     let uploadedBy = "system";
     if (req.user && req.user.id) {
@@ -1082,36 +1175,55 @@ export const uploadCompanyFile = async (req, res) => {
     }
 
     if (!req.file) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Fayl seçilməyib" 
+        message: "Fayl seçilməyib",
       });
     }
 
     // Category və visibleTo dəyərlərini validate edirik
-    const validCategories = ['document', 'policy', 'report', 'training', 'template', 'other'];
-    const validVisibleTo = ['all', 'departments', 'managers'];
-    
-    const finalCategory = validCategories.includes(category) ? category : 'document';
-    const finalVisibleTo = validVisibleTo.includes(visibleTo) ? visibleTo : 'all';
+    const validCategories = [
+      "document",
+      "policy",
+      "report",
+      "training",
+      "template",
+      "other",
+    ];
+    const validVisibleTo = ["all", "departments", "managers"];
+
+    const finalCategory = validCategories.includes(category)
+      ? category
+      : "document";
+    const finalVisibleTo = validVisibleTo.includes(visibleTo)
+      ? visibleTo
+      : "all";
 
     // Yeni fayl yaradırıq
     const companyFile = new CompanyFile({
       companyId,
       title: title || req.file.originalname,
-      description: description || '',
+      description: description || "",
       category: finalCategory,
-      
+
       filename: req.file.originalname,
       originalName: req.file.originalname,
       contentType: req.file.mimetype,
       data: req.file.buffer,
       fileSize: req.file.size,
-      
+
       uploadedBy,
       visibleTo: finalVisibleTo,
-      departments: departments ? (Array.isArray(departments) ? departments : [departments]) : [],
-      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim())) : []
+      departments: departments
+        ? Array.isArray(departments)
+          ? departments
+          : [departments]
+        : [],
+      tags: tags
+        ? Array.isArray(tags)
+          ? tags
+          : tags.split(",").map((tag) => tag.trim())
+        : [],
     });
 
     await companyFile.save();
@@ -1130,14 +1242,14 @@ export const uploadCompanyFile = async (req, res) => {
         visibleTo: companyFile.visibleTo,
         uploadedAt: companyFile.createdAt,
         downloadUrl: `/api/company/${companyId}/files/${companyFile._id}/download`,
-        previewUrl: `/api/company/${companyId}/files/${companyFile._id}/view`
-      }
+        previewUrl: `/api/company/${companyId}/files/${companyFile._id}/view`,
+      },
     });
   } catch (error) {
     console.error("Upload xətası:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
@@ -1147,25 +1259,35 @@ export const getCompanyFiles = async (req, res) => {
   try {
     const { companyId } = req.params;
     const { category, search, page = 1, limit = 20 } = req.query;
-    
+
     const employeeId = req.user?.id;
     const employeeDepartment = req.user?.department;
 
     // Filter yaradırıq
-    let filter = { 
-      companyId, 
-      isActive: true 
+    let filter = {
+      companyId,
+      isActive: true,
     };
 
-    if (category && ['document', 'policy', 'report', 'training', 'template', 'other'].includes(category)) {
+    if (
+      category &&
+      [
+        "document",
+        "policy",
+        "report",
+        "training",
+        "template",
+        "other",
+      ].includes(category)
+    ) {
       filter.category = category;
     }
 
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -1174,19 +1296,19 @@ export const getCompanyFiles = async (req, res) => {
 
     // Bütün faylları getir
     const files = await CompanyFile.find(filter)
-      .select('-data') // Fayl datalarını çıxarırıq (performans)
+      .select("-data") // Fayl datalarını çıxarırıq (performans)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     // İşçinin görə biləcəyi faylları filter et
-    const accessibleFiles = files.filter(file => {
-      if (file.visibleTo === 'all') return true;
-      if (file.visibleTo === 'managers') {
+    const accessibleFiles = files.filter((file) => {
+      if (file.visibleTo === "all") return true;
+      if (file.visibleTo === "managers") {
         // Manager yoxlaması
-        return req.user?.role === 'manager' || req.user?.role === 'admin';
+        return req.user?.role === "manager" || req.user?.role === "admin";
       }
-      if (file.visibleTo === 'departments') {
+      if (file.visibleTo === "departments") {
         return file.departments.includes(employeeDepartment);
       }
       return false;
@@ -1197,7 +1319,7 @@ export const getCompanyFiles = async (req, res) => {
 
     res.json({
       success: true,
-      data: accessibleFiles.map(file => ({
+      data: accessibleFiles.map((file) => ({
         _id: file._id,
         title: file.title,
         description: file.description,
@@ -1212,19 +1334,19 @@ export const getCompanyFiles = async (req, res) => {
         downloadCount: file.downloadCount,
         createdAt: file.createdAt,
         downloadUrl: `/api/company/${companyId}/files/${file._id}/download`,
-        previewUrl: `/api/company/${companyId}/files/${file._id}/view`
+        previewUrl: `/api/company/${companyId}/files/${file._id}/view`,
       })),
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
-      }
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
@@ -1235,25 +1357,25 @@ export const downloadCompanyFile = async (req, res) => {
     const { companyId, fileId } = req.params;
 
     // Faylı tap
-    const file = await CompanyFile.findOne({ 
-      _id: fileId, 
+    const file = await CompanyFile.findOne({
+      _id: fileId,
       companyId,
-      isActive: true 
+      isActive: true,
     });
 
     if (!file) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Fayl tapılmadı" 
+        message: "Fayl tapılmadı",
       });
     }
 
     // İşçinin bu faylı görə biləcəyini yoxla
     const hasAccess = checkFileAccess(file, req.user);
     if (!hasAccess) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        message: "Bu fayla giriş icazəniz yoxdur" 
+        message: "Bu fayla giriş icazəniz yoxdur",
       });
     }
 
@@ -1264,19 +1386,19 @@ export const downloadCompanyFile = async (req, res) => {
 
     // Response header-larını təyin et
     const filename = encodeURIComponent(file.originalName || file.filename);
-    
+
     res.set({
-      'Content-Type': file.contentType,
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': file.fileSize
+      "Content-Type": file.contentType,
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": file.fileSize,
     });
 
     // Buffer məlumatını göndər
     res.send(file.data);
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
@@ -1288,23 +1410,26 @@ const checkFileAccess = (file, user) => {
   if (!user) {
     return true; // TEST ÜÇÜN TRUE QAYTARIRIQ
   }
-  
+
   // Admin hər şeyə baxa bilər
-  if (user.role === 'admin' || user.role === 'company_admin') {
+  if (user.role === "admin" || user.role === "company_admin") {
     return true;
   }
 
   // Normal işçilər üçün access qaydaları
   switch (file.visibleTo) {
-    case 'all':
+    case "all":
       return true;
-    
-    case 'managers':
-      return user.role === 'manager' || user.role === 'supervisor';
-    
-    case 'departments':
-      return file.departments.includes(user.department) || file.departments.length === 0;
-    
+
+    case "managers":
+      return user.role === "manager" || user.role === "supervisor";
+
+    case "departments":
+      return (
+        file.departments.includes(user.department) ||
+        file.departments.length === 0
+      );
+
     default:
       return false;
   }
@@ -1317,20 +1442,20 @@ export const deleteCompanyFile = async (req, res) => {
 
     // Soft delete - isActive false edirik
     const file = await CompanyFile.findOneAndUpdate(
-      { 
-        _id: fileId, 
-        companyId 
+      {
+        _id: fileId,
+        companyId,
       },
-      { 
-        isActive: false 
+      {
+        isActive: false,
       },
       { new: true }
     );
 
     if (!file) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Fayl tapılmadı" 
+        message: "Fayl tapılmadı",
       });
     }
 
@@ -1339,13 +1464,13 @@ export const deleteCompanyFile = async (req, res) => {
       message: "Fayl uğurla silindi",
       data: {
         fileId: file._id,
-        title: file.title
-      }
+        title: file.title,
+      },
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
@@ -1355,44 +1480,52 @@ export const viewCompanyFile = async (req, res) => {
   try {
     const { companyId, fileId } = req.params;
 
-    const file = await CompanyFile.findOne({ 
-      _id: fileId, 
+    const file = await CompanyFile.findOne({
+      _id: fileId,
       companyId,
-      isActive: true 
+      isActive: true,
     });
 
     if (!file) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Fayl tapılmadı" 
+        message: "Fayl tapılmadı",
       });
     }
 
     // Access yoxlaması
     const hasAccess = checkFileAccess(file, req.user);
     if (!hasAccess) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        message: "Bu fayla giriş icazəniz yoxdur" 
+        message: "Bu fayla giriş icazəniz yoxdur",
       });
     }
 
     // Content-Type'ı təyin et
     res.set("Content-Type", file.contentType);
-    
+
     // PDF və şəkillər üçün preview, digərləri üçün download
-    if (file.contentType.startsWith('image/') || file.contentType === 'application/pdf') {
-      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
+    if (
+      file.contentType.startsWith("image/") ||
+      file.contentType === "application/pdf"
+    ) {
+      res.set(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(file.originalName)}"`
+      );
     } else {
-      res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);
+      res.set(
+        "Content-Disposition",
+        `attachment; filename="${encodeURIComponent(file.originalName)}"`
+      );
     }
-    
+
     res.send(file.data);
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
-
