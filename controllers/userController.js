@@ -6,10 +6,11 @@ import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/generateToken.js";
+import jwt from "jsonwebtoken"; // JWT üçün
 
 const OTP_EXPIRE_MIN = 5; // OTP 5 dəqiqə sonra bitir
-// ✅ Yeni istifadəçi qeydiyyatı
 
+// ✅ Yeni istifadəçi qeydiyyatı
 export const registerUser = async (req, res) => {
   try {
     const { fullName, companyName, email, password } = req.body;
@@ -36,7 +37,7 @@ export const registerUser = async (req, res) => {
       email,
       "Nummix OTP Təsdiqləmə",
       `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}`
-    );
+    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
 
     res.status(201).json({
       _id: user._id,
@@ -101,7 +102,7 @@ export const resendOtp = async (req, res) => {
       user.email,
       "Nummix Yeni OTP",
       `Salam ${user.fullName},\nSizin yeni OTP kodunuz: ${otpCode}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
-    );
+    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
 
     res.json({ message: "Yeni OTP göndərildi." });
   } catch (error) {
@@ -109,10 +110,7 @@ export const resendOtp = async (req, res) => {
   }
 };
 
-// User login + login bloklama
-
 // ✅ İstifadəçi girişi
-
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -128,11 +126,7 @@ export const loginUser = async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    console.log({
-      inputPassword: password,
-      dbPassword: user.password,
-      isMatch,
-    });
+
     if (!isMatch) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
 
@@ -179,6 +173,7 @@ export const getProfile = async (req, res) => {
   });
 };
 
+// Forgot password
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -194,7 +189,7 @@ export const forgotPassword = async (req, res) => {
       user.email,
       "Nummix Şifrə Yeniləmə OTP",
       `Salam ${user.fullName},\nŞifrənizi yeniləmək üçün OTP kodunuz: ${resetOtp}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
-    );
+    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
 
     res.json({ message: "OTP email-ə göndərildi" });
   } catch (error) {
@@ -202,25 +197,31 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// ✅ Refresh token ilə yeni access token əldə et
+// Refresh token
 export const refreshAccessToken = async (req, res) => {
   try {
     const { token } = req.body;
     if (!token)
       return res.status(401).json({ message: "Refresh token tələb olunur" });
 
-    const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Refresh token etibarsızdır" });
+    }
+
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
 
     const newAccessToken = generateAccessToken(user._id);
     res.json({ accessToken: newAccessToken });
   } catch (error) {
-    res.status(401).json({ message: "Refresh token etibarsızdır" });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// --- Reset Password ---
+// Reset password
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -236,11 +237,11 @@ export const resetPassword = async (req, res) => {
     if (user.resetOtp !== otp)
       return res.status(400).json({ message: "OTP yanlışdır" });
 
-    user.password = newPassword; // ⚠️ HASH ETMƏ
+    user.password = newPassword; // ⚠️ plain
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
 
-    await user.save(); // pre("save") özü hash edəcək
+    await user.save();
 
     res.json({ message: "Şifrə uğurla yeniləndi ✅" });
   } catch (error) {
@@ -248,7 +249,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ✅ Bütün istifadəçiləri getir
+// Bütün istifadəçiləri getir
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select("-password");
@@ -258,20 +259,18 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-// ✅ ID ilə istifadəçi getir
+// ID ilə istifadəçi getir
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
+    if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ İstifadəçi məlumatlarını yenilə
+// İstifadəçi məlumatlarını yenilə
 export const updateUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -285,6 +284,7 @@ export const updateUser = async (req, res) => {
         .status(403)
         .json({ message: "Siz yalnız öz profilinizi yeniləyə bilərsiniz" });
     }
+
     if (req.body.password) {
       user.password = req.body.password; // ⚠️ plain
     }
@@ -305,14 +305,12 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// ✅ İstifadəçini sil
+// İstifadəçini sil
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-    // ✅ Admin yalnız başqalarını silə bilər
+    if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+
     if (req.user._id.toString() === user._id.toString()) {
       return res
         .status(403)
@@ -324,6 +322,7 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 // ===================== 💰 YENİ VERGİ VƏ ÖDƏNİŞ FUNKSİYALARI =====================
 
 // ✅ Əməkhaqqı fondu yenilə
