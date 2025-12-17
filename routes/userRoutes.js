@@ -45,11 +45,9 @@ import {
   refreshAccessToken,
 } from "../controllers/userController.js";
 import protect from "../middlewares/authMiddleware.js";
-import rateLimit from "express-rate-limit";
 import { loginLimiter, otpLimiter } from "../middlewares/rateLimit.js";
 import { adminOnly } from "../middlewares/adminMiddleware.js";
 import { upload } from "../controllers/userController.js";
-
 
 const router = express.Router();
 
@@ -373,7 +371,7 @@ const router = express.Router();
  *         description: Daxili server xətası
 
  */
-router.post("/register", rateLimit, registerUser);
+router.post("/register", registerUser);
 /**
  * @swagger
 
