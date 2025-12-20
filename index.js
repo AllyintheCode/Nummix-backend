@@ -27,6 +27,7 @@ import { specs, swaggerUi } from "./swagger.js";
 import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 import { fileURLToPath } from "url";
+import chatbotRoute from "./routes/chatbotRoute.js";
 
 dotenv.config();
 
@@ -98,6 +99,7 @@ app.use("/api/products", productsRoute);
 app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
+app.use("/api/chatbot", chatbotRoute);
 
 // --- DB connect ---
 connectDB();
