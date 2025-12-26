@@ -16,10 +16,11 @@ export const registerUser = async (req, res) => {
     const { fullName, companyName, email, password } = req.body;
 
     const userExists = await User.findOne({ email });
-    if (userExists)
+    if (userExists) {
       return res
         .status(400)
         .json({ message: "Bu email artıq istifadə olunub" });
+    }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -27,25 +28,29 @@ export const registerUser = async (req, res) => {
       fullName,
       companyName,
       email,
-      password, // ⚠️ plain
+      password,
       otp: otpCode,
       otpExpires: new Date(Date.now() + OTP_EXPIRE_MIN * 60 * 1000),
       isVerified: false,
     });
 
-    await sendEmail(
-      email,
-      "Nummix OTP Təsdiqləmə",
-      `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}`
-    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
-
-    res.status(201).json({
-      _id: user._id,
-      email: user.email,
-      message: "OTP email-ə göndərildi",
-    });
+    try {
+      await sendEmail(
+        email,
+        "Nummix OTP Təsdiqləmə",
+        `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}`
+      );
+      return res.status(201).json({
+        _id: user._id,
+        email: user.email,
+        message: "OTP email-ə göndərildi",
+      });
+    } catch (emailErr) {
+      console.error("Email göndərmə xətası:", emailErr.message);
+      return res.status(500).json({ message: "Email göndərilmədi" });
+    }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -98,15 +103,19 @@ export const resendOtp = async (req, res) => {
     user.otpExpires = new Date(Date.now() + OTP_EXPIRE_MIN * 60 * 1000);
     await user.save();
 
-    await sendEmail(
-      user.email,
-      "Nummix Yeni OTP",
-      `Salam ${user.fullName},\nSizin yeni OTP kodunuz: ${otpCode}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
-    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
-
-    res.json({ message: "Yeni OTP göndərildi." });
+    try {
+      await sendEmail(
+        user.email,
+        "Nummix Yeni OTP",
+        `Salam ${user.fullName},\nSizin yeni OTP kodunuz: ${otpCode}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
+      );
+      return res.json({ message: "Yeni OTP göndərildi." });
+    } catch (emailErr) {
+      console.error("Email göndərmə xətası:", emailErr.message);
+      return res.status(500).json({ message: "Email göndərilmədi" });
+    }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -177,6 +186,7 @@ export const getProfile = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "İstifadəçi tapılmadı" });
 
@@ -185,15 +195,19 @@ export const forgotPassword = async (req, res) => {
     user.resetOtpExpires = new Date(Date.now() + OTP_EXPIRE_MIN * 60 * 1000);
     await user.save();
 
-    await sendEmail(
-      user.email,
-      "Nummix Şifrə Yeniləmə OTP",
-      `Salam ${user.fullName},\nŞifrənizi yeniləmək üçün OTP kodunuz: ${resetOtp}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
-    ).catch((err) => console.error("Email göndərmə xətası:", err.message));
-
-    res.json({ message: "OTP email-ə göndərildi" });
+    try {
+      await sendEmail(
+        user.email,
+        "Nummix Şifrə Yeniləmə OTP",
+        `Salam ${user.fullName},\nŞifrənizi yeniləmək üçün OTP kodunuz: ${resetOtp}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
+      );
+      return res.json({ message: "OTP email-ə göndərildi" });
+    } catch (emailErr) {
+      console.error("Email göndərmə xətası:", emailErr.message);
+      return res.status(500).json({ message: "Email göndərilmədi" });
+    }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
