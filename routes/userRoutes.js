@@ -664,8 +664,7 @@ router.post("/reset-password", resetPassword);
  *             properties:
  *               token:
  *                 type: string
- *               password:
- *                 type: string
+ *
  *     responses:
  *       200:
  *         description: Password reset successful
@@ -687,7 +686,7 @@ router.post("/reset-password", resetPassword);
  *           schema:
  *             type: object
  *             properties:
- *               refreshToken:
+ *               token:
  *                 type: string
  *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *     responses:

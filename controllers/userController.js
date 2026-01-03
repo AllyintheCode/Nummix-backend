@@ -44,7 +44,7 @@ export const registerUser = async (req, res) => {
     sendEmail(
       email,
       "Nummix OTP Təsdiqləmə",
-      `Salam ${fullName}, OTP: ${otpCode}`
+      `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}\nBu kod ${OTP_EXPIRE_MIN} dəqiqə ərzində etibarlıdır.`
     ).catch((err) => {
       console.error("Email error:", err.message);
     });
@@ -250,7 +250,7 @@ export const resetPassword = async (req, res) => {
     if (user.resetOtp !== otp)
       return res.status(400).json({ message: "OTP yanlışdır" });
 
-    user.password = newPassword; // ⚠️ plain
+    user.password = newPassword;
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
 
@@ -299,7 +299,7 @@ export const updateUser = async (req, res) => {
     }
 
     if (req.body.password) {
-      user.password = req.body.password; // ⚠️ plain
+      user.password = req.body.password; 
     }
 
     user.fullName = req.body.fullName ?? user.fullName;
