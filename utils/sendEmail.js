@@ -16,18 +16,16 @@ const transporter = nodemailer.createTransport({
 // ✅ Email göndərmə funksiyası
 const sendEmail = async (to, subject, text) => {
   try {
-    const mailOptions = {
+    await transporter.sendMail({
       from: `"Nummix" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       text,
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
     console.log("Email göndərildi:", to);
   } catch (error) {
     console.error("Email göndərmə xətası:", error.message);
-    throw error; // Controller tərəfindən catch olunacaq
+    throw error;
   }
 };
 

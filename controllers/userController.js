@@ -34,21 +34,20 @@ export const registerUser = async (req, res) => {
       isVerified: false,
     });
 
-    try {
-      await sendEmail(
-        email,
-        "Nummix OTP Təsdiqləmə",
-        `Salam ${fullName},\nSizin OTP kodunuz: ${otpCode}`
-      );
-      return res.status(201).json({
-        _id: user._id,
-        email: user.email,
-        message: "OTP email-ə göndərildi",
-      });
-    } catch (emailErr) {
-      console.error("Email göndərmə xətası:", emailErr.message);
-      return res.status(500).json({ message: "Email göndərilmədi" });
-    }
+    res.status(201).json({
+      _id: user._id,
+      email: user.email,
+      message: "OTP göndərildi",
+    });
+
+    // 👉 email-i background-da göndər (await YOX)
+    sendEmail(
+      email,
+      "Nummix OTP Təsdiqləmə",
+      `Salam ${fullName}, OTP: ${otpCode}`
+    ).catch((err) => {
+      console.error("Email error:", err.message);
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
