@@ -2,11 +2,8 @@ import Warehouse from "../models/warehousesSchema.js";
 
 export const getAllWarehouses = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
         const warehouses = await Warehouse.find({
-            userId: req.user?._id,
-            $text: { $search: searchQuery },
+            userId: req.user?._id
         }).sort({
             createdAt: -1,
         });

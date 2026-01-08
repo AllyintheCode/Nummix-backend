@@ -11,6 +11,7 @@ import ordersRoute from "./routes/ordersRoute.js";
 import productsRoute from "./routes/productsRoute.js";
 import warehousesRoute from "./routes/warehousesRoute.js";
 import warehouseOperationsRoute from "./routes/warehouseOperationsRoute.js";
+import paymentsRoute from "./routes/paymentsRoute.js";
 import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
@@ -69,7 +70,7 @@ const swaggerSpec = swaggerJsdoc(options);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// connectDB();
+connectDB();
 app.use("/api/users", userRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/sales", salesRoute);
@@ -81,6 +82,7 @@ app.use("/api/products", productsRoute);
 app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
+app.use("/api/payments", paymentsRoute);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir`));

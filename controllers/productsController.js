@@ -2,9 +2,7 @@ import Product from "../models/productsSchema.js";
 
 export const getAllProducts = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
-        const products = await Product.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
+        const products = await Product.find({ userId: req.user?._id }).sort({
             createdAt: -1,
         });
 
@@ -92,6 +90,7 @@ export const createProduct = async (req, res) => {
             data: savedProduct,
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };

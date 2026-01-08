@@ -2,11 +2,8 @@ import Customer from "../models/customersSchema.js";
 
 export const getAllCustomers = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
         const customers = await Customer.find({
             userId: req.user?._id,
-            $text: { $search: searchQuery },
         }).sort({
             createdAt: -1,
         });
