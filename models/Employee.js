@@ -94,11 +94,36 @@ const employeeSchema = new mongoose.Schema({
   },
 
   // Cari ay üçün maaş məlumatları
-  gross: { type: Number, default: 0 },
+  gross: { 
+    type: Number, 
+    default: 0,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v >= 400;
+      },
+      message: 'Əməkhaqqı 400 AZN-dən aşağı ola bilməz'
+    }
+  },
   tax: { type: Number, default: 0 },
   social_pay: { type: Number, default: 0 },
   Net_salary: { type: Number, default: 0 },
-  salary_status: { type: String, default: "pending" },
+  salary_status: { 
+    type: String, 
+    enum: ["pending", "paid", "not_set"],
+    default: "pending" 
+  },
+
+  // İşəgötürən vergiləri (şirkət üçün)
+  employer_taxes: {
+    dsmf: { type: Number, default: 0 },
+    its: { type: Number, default: 0 },
+    ish: { type: Number, default: 0 },
+    total: { type: Number, default: 0 }
+  },
+
+  // Ümumi şirkət xərci (gross + employer_taxes.total)
+  total_company_cost: { type: Number, default: 0 },
 
   // Maaş ödəniş tarixləri
   paymentHistory: [paymentHistorySchema],
@@ -114,33 +139,71 @@ const employeeSchema = new mongoose.Schema({
 
   // Digər mövcud fieldlər...
   Recent_Notifications: { type: Array, default: [] },
-  status: { type: String, enum: ["active", "on_leave", "terminated"], default: "active" },
-  hireDate: { type: Date, required: true },
+  status: { 
+    type: String, 
+    enum: ["active", "on_leave", "terminated"], 
+    default: "active" 
+  },
+  hireDate: { 
+    type: Date, 
+    required: true,
+    default: Date.now 
+  },
+  terminationDate: { type: Date },
   lateAllowed: { type: Number, default: 0 },
   isLate: { type: Boolean, default: false },
   lateMinutes: { type: Number, default: 0 },
-  lateType: { type: String, enum: ["voluntary", "involuntary", "other"], default: "other" },
+  lateType: { 
+    type: String, 
+    enum: ["voluntary", "involuntary", "other"], 
+    default: "other" 
+  },
   onLeave: { type: Boolean, default: false },
   currentLeaveId: { type: String, default: null },
   leaves: [leaveSchema],
   attendances: [attendanceSchema],
   Department: { type: String },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-// ===================== ⚡ AVTOMATİK MAAŞ HESABLAMA MIDDLEWARE =====================
+// ===================== ⚡ AVTOMATİK MAAŞ VƏ VERGİ HESABLAMA =====================
 
-// gross və ya employeeType dəyişdikdə avtomatik hesabla
-employeeSchema.pre('save', function (next) {
-  // Əgər gross və ya employeeType dəyişməyibsə, hesablama
-  if (!this.isModified('gross') && !this.isModified('employeeType')) {
+// Virtual field: Ümumi vergilər (işçi üçün)
+employeeSchema.virtual('total_employee_taxes').get(function() {
+  return (this.tax || 0) + (this.social_pay || 0);
+});
+
+// Virtual field: Ümumi vergilər (işçi + işəgötürən)
+employeeSchema.virtual('total_all_taxes').get(function() {
+  const employeeTaxes = (this.tax || 0) + (this.social_pay || 0);
+  const employerTaxes = this.employer_taxes?.total || 0;
+  return employeeTaxes + employerTaxes;
+});
+
+// Virtual field: Şirkət ümumi xərci
+employeeSchema.virtual('company_total_cost').get(function() {
+  return (this.gross || 0) + (this.employer_taxes?.total || 0);
+});
+
+// ===================== MIDDLEWARE: CREATE & UPDATE =====================
+
+// Yeni işçi yaradılanda və ya update ediləndə avtomatik hesabla
+employeeSchema.pre('save', async function(next) {
+  // Əgər işçi terminated-dırsa, hesablama etmə
+  if (this.status === 'terminated') {
     return next();
   }
 
-  // Əgər gross yoxdursa və ya 0-dırsa, hesablama
+  // Əgər gross 0-dırsa və ya yoxdursa
   if (!this.gross || this.gross === 0) {
     this.tax = 0;
     this.social_pay = 0;
     this.Net_salary = 0;
+    this.employer_taxes = { dsmf: 0, its: 0, ish: 0, total: 0 };
+    this.total_company_cost = 0;
     this.salary_status = "not_set";
     return next();
   }
@@ -152,39 +215,56 @@ employeeSchema.pre('save', function (next) {
   }
 
   try {
-    // Vergiləri avtomatik hesabla
+    // TAX SERVICE ilə bütün vergiləri hesabla
     const taxResult = taxCalculationService.calculateAllTaxes(
       this.gross,
       this.employeeType || 'private'
     );
 
-    // Vergiləri ayır
-    let tax, social_pay;
-
+    // İŞÇİ VERGİLƏRİ
     if (this.employeeType === 'state') {
-      tax = taxResult.employee.taxes.incomeTax;
-      social_pay = taxResult.employee.taxes.dsmf +
-        taxResult.employee.taxes.ish +
-        taxResult.employee.taxes.its;
+      // Dövlət işçisi
+      this.tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+      this.social_pay = Number(
+        (taxResult.employee.taxes.dsmf + 
+         taxResult.employee.taxes.ish + 
+         taxResult.employee.taxes.its).toFixed(2)
+      );
     } else {
-      tax = taxResult.employee.taxes.incomeTax;
-
-      // Social insurance hesabla
-      social_pay = taxResult.employee.taxes.dsmf +
-        taxResult.employee.taxes.ish +
-        taxResult.employee.taxes.its;
-
+      // Özəl işçi
+      this.tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+      let socialPay = taxResult.employee.taxes.dsmf + 
+                     taxResult.employee.taxes.ish + 
+                     taxResult.employee.taxes.its;
+      
       // Əgər gvTax varsa (8000+ üçün)
       if (taxResult.employee.taxes.gvTax) {
-        social_pay += taxResult.employee.taxes.gvTax;
+        socialPay += taxResult.employee.taxes.gvTax;
       }
+      
+      this.social_pay = Number(socialPay.toFixed(2));
     }
 
-    // Dəyərləri təyin et
-    this.tax = Number(tax.toFixed(2));
-    this.social_pay = Number(social_pay.toFixed(2));
+    // NET MAAŞ
     this.Net_salary = Number(taxResult.employee.netSalary.toFixed(2));
-    this.salary_status = "pending";
+
+    // İŞƏGÖTÜRƏN VERGİLƏRİ
+    this.employer_taxes = {
+      dsmf: Number(taxResult.employer.employerTaxes.dsmf.toFixed(2)),
+      its: Number(taxResult.employer.employerTaxes.its.toFixed(2)),
+      ish: Number(taxResult.employer.employerTaxes.ish.toFixed(2)),
+      total: Number(taxResult.employer.totalEmployerTaxes.toFixed(2))
+    };
+
+    // ÜMUMİ ŞİRKƏT XƏRCİ
+    this.total_company_cost = Number(
+      (this.gross + this.employer_taxes.total).toFixed(2)
+    );
+
+    // Əgər yeni işçidirsə, salary_status pending olsun
+    if (this.isNew) {
+      this.salary_status = "pending";
+    }
 
     next();
   } catch (error) {
@@ -192,82 +272,229 @@ employeeSchema.pre('save', function (next) {
   }
 });
 
-// Əgər findOneAndUpdate istifadə ediriksə (PATCH/PUT üçün)
-employeeSchema.pre('findOneAndUpdate', async function (next) {
+// ===================== FINDONEANDUPDATE ÜÇÜN MIDDLEWARE =====================
+
+employeeSchema.pre('findOneAndUpdate', async function(next) {
   const update = this.getUpdate();
-
-  // Əgər gross və ya employeeType dəyişməyibsə
-  if (!update.gross && !update.employeeType) {
+  
+  // Əgər gross update edilməyibsə və employeeType da yoxdursa, heç nə etmə
+  if (!update.$set?.gross && !update.gross && !update.$set?.employeeType && !update.employeeType) {
     return next();
-  }
-
-  const gross = update.gross;
-  const employeeType = update.employeeType;
-
-  // Əgər gross undefined-dırsa, heç nə etmə
-  if (gross === undefined) {
-    return next();
-  }
-
-  // Əgər gross 0 və ya null-dursa
-  if (!gross || gross === 0) {
-    update.tax = 0;
-    update.social_pay = 0;
-    update.Net_salary = 0;
-    update.salary_status = "not_set";
-    return next();
-  }
-
-  // Minimum əməkhaqqı yoxlaması
-  if (gross < 400) {
-    const err = new Error('Əməkhaqqı 400 AZN-dən aşağı ola bilməz');
-    return next(err);
   }
 
   try {
-    // Cari employeeType-u al (update-də gəlməyibsə, bazadan oxu)
-    let currentEmployeeType = employeeType;
-    if (!currentEmployeeType) {
-      const docToUpdate = await this.model.findOne(this.getQuery());
-      currentEmployeeType = docToUpdate ? docToUpdate.employeeType : 'private';
+    // Cari sənədi tap
+    const docToUpdate = await this.model.findOne(this.getQuery());
+    if (!docToUpdate) return next();
+
+    // Yeni gross və employeeType dəyərlərini təyin et
+    const newGross = update.$set?.gross || update.gross || docToUpdate.gross;
+    const newEmployeeType = update.$set?.employeeType || update.employeeType || docToUpdate.employeeType;
+
+    // Əgər gross 0 və ya yoxdursa
+    if (!newGross || newGross === 0) {
+      this.set({
+        tax: 0,
+        social_pay: 0,
+        Net_salary: 0,
+        employer_taxes: { dsmf: 0, its: 0, ish: 0, total: 0 },
+        total_company_cost: 0,
+        salary_status: "not_set"
+      });
+      return next();
     }
 
-    // Vergiləri hesabla
+    // Minimum əməkhaqqı yoxlaması
+    if (newGross < 400) {
+      const err = new Error('Əməkhaqqı 400 AZN-dən aşağı ola bilməz');
+      return next(err);
+    }
+
+    // TAX SERVICE ilə hesabla
     const taxResult = taxCalculationService.calculateAllTaxes(
-      gross,
-      currentEmployeeType
+      newGross,
+      newEmployeeType || 'private'
     );
 
-    // Vergiləri ayır
+    // Yeni dəyərləri hesabla
     let tax, social_pay;
-
-    if (currentEmployeeType === 'state') {
-      tax = taxResult.employee.taxes.incomeTax;
-      social_pay = taxResult.employee.taxes.dsmf +
-        taxResult.employee.taxes.ish +
-        taxResult.employee.taxes.its;
+    
+    if (newEmployeeType === 'state') {
+      // Dövlət işçisi
+      tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+      social_pay = Number(
+        (taxResult.employee.taxes.dsmf + 
+         taxResult.employee.taxes.ish + 
+         taxResult.employee.taxes.its).toFixed(2)
+      );
     } else {
-      tax = taxResult.employee.taxes.incomeTax;
-      social_pay = taxResult.employee.taxes.dsmf +
-        taxResult.employee.taxes.ish +
-        taxResult.employee.taxes.its;
-
-      // Əgər gvTax varsa (8000+ üçün)
+      // Özəl işçi
+      tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+      let socialPay = taxResult.employee.taxes.dsmf + 
+                     taxResult.employee.taxes.ish + 
+                     taxResult.employee.taxes.its;
+      
       if (taxResult.employee.taxes.gvTax) {
-        social_pay += taxResult.employee.taxes.gvTax;
+        socialPay += taxResult.employee.taxes.gvTax;
       }
+      
+      social_pay = Number(socialPay.toFixed(2));
     }
 
-    // Update obyektinə vergi dəyərlərini əlavə et
-    update.tax = Number(tax.toFixed(2));
-    update.social_pay = Number(social_pay.toFixed(2));
-    update.Net_salary = Number(taxResult.employee.netSalary.toFixed(2));
-    update.salary_status = "pending";
+    const netSalary = Number(taxResult.employee.netSalary.toFixed(2));
+    const employerTaxes = {
+      dsmf: Number(taxResult.employer.employerTaxes.dsmf.toFixed(2)),
+      its: Number(taxResult.employer.employerTaxes.its.toFixed(2)),
+      ish: Number(taxResult.employer.employerTaxes.ish.toFixed(2)),
+      total: Number(taxResult.employer.totalEmployerTaxes.toFixed(2))
+    };
+    
+    const totalCompanyCost = Number((newGross + employerTaxes.total).toFixed(2));
+
+    // Update obyektinə yeni dəyərləri əlavə et
+    this.set({
+      tax,
+      social_pay,
+      Net_salary: netSalary,
+      employer_taxes: employerTaxes,
+      total_company_cost: totalCompanyCost,
+      salary_status: "pending"
+    });
 
     next();
   } catch (error) {
     next(error);
   }
 });
+
+// ===================== İŞÇİ TERMİNATED OLDUQDA =====================
+
+employeeSchema.pre('save', function(next) {
+  if (this.isModified('status') && this.status === 'terminated' && !this.terminationDate) {
+    this.terminationDate = new Date();
+  }
+  next();
+});
+
+// ===================== STATİK METODLAR =====================
+
+// Şirkət üçün ümumi maaş statistikası
+employeeSchema.statics.getCompanySalarySummary = async function(companyId) {
+  const employees = await this.find({ 
+    companyId, 
+    status: 'active',
+    gross: { $gt: 0 }
+  });
+
+  if (employees.length === 0) {
+    return {
+      totalEmployees: 0,
+      totalGross: 0,
+      totalNet: 0,
+      totalTax: 0,
+      totalSocialPay: 0,
+      totalEmployerTaxes: 0,
+      totalCompanyCost: 0,
+      averageGross: 0,
+      averageNet: 0
+    };
+  }
+
+  const summary = employees.reduce((acc, emp) => {
+    acc.totalGross += emp.gross || 0;
+    acc.totalNet += emp.Net_salary || 0;
+    acc.totalTax += emp.tax || 0;
+    acc.totalSocialPay += emp.social_pay || 0;
+    acc.totalEmployerTaxes += emp.employer_taxes?.total || 0;
+    acc.totalCompanyCost += emp.total_company_cost || 0;
+    return acc;
+  }, {
+    totalEmployees: employees.length,
+    totalGross: 0,
+    totalNet: 0,
+    totalTax: 0,
+    totalSocialPay: 0,
+    totalEmployerTaxes: 0,
+    totalCompanyCost: 0
+  });
+
+  summary.averageGross = Number((summary.totalGross / employees.length).toFixed(2));
+  summary.averageNet = Number((summary.totalNet / employees.length).toFixed(2));
+
+  return summary;
+};
+
+// ===================== İNSTANCE METODLAR =====================
+
+// İşçinin maaşını yenidən hesabla
+employeeSchema.methods.recalculateSalary = function() {
+  if (this.gross < 400) {
+    throw new Error('Əməkhaqqı 400 AZN-dən aşağı ola bilməz');
+  }
+
+  const taxResult = taxCalculationService.calculateAllTaxes(
+    this.gross,
+    this.employeeType || 'private'
+  );
+
+  if (this.employeeType === 'state') {
+    this.tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+    this.social_pay = Number(
+      (taxResult.employee.taxes.dsmf + 
+       taxResult.employee.taxes.ish + 
+       taxResult.employee.taxes.its).toFixed(2)
+    );
+  } else {
+    this.tax = Number(taxResult.employee.taxes.incomeTax.toFixed(2));
+    let socialPay = taxResult.employee.taxes.dsmf + 
+                   taxResult.employee.taxes.ish + 
+                   taxResult.employee.taxes.its;
+    
+    if (taxResult.employee.taxes.gvTax) {
+      socialPay += taxResult.employee.taxes.gvTax;
+    }
+    
+    this.social_pay = Number(socialPay.toFixed(2));
+  }
+
+  this.Net_salary = Number(taxResult.employee.netSalary.toFixed(2));
+  this.employer_taxes = {
+    dsmf: Number(taxResult.employer.employerTaxes.dsmf.toFixed(2)),
+    its: Number(taxResult.employer.employerTaxes.its.toFixed(2)),
+    ish: Number(taxResult.employer.employerTaxes.ish.toFixed(2)),
+    total: Number(taxResult.employer.totalEmployerTaxes.toFixed(2))
+  };
+  this.total_company_cost = Number(
+    (this.gross + this.employer_taxes.total).toFixed(2)
+  );
+
+  return this;
+};
+
+// Maaş ödənişi et
+employeeSchema.methods.processSalaryPayment = function(paymentDate = new Date()) {
+  this.paymentHistory.push({
+    paymentType: "salary",
+    amount: this.Net_salary,
+    paymentDate: paymentDate,
+    status: "completed",
+    forMonth: new Date(paymentDate.getFullYear(), paymentDate.getMonth(), 1),
+    description: `Aylıq maaş ödənişi - ${paymentDate.toLocaleDateString('az-AZ')}`,
+    taxDetails: {
+      grossSalary: this.gross,
+      incomeTax: this.tax,
+      socialInsurance: this.social_pay,
+      its: this.employer_taxes?.its || 0,
+      ish: this.employer_taxes?.ish || 0,
+      netSalary: this.Net_salary
+    }
+  });
+
+  this.lastPaymentDate = paymentDate;
+  this.nextPaymentDate = new Date(paymentDate.getFullYear(), paymentDate.getMonth() + 1, 1);
+  this.salary_status = "paid";
+
+  return this;
+};
 
 export default mongoose.model("Employee", employeeSchema);
