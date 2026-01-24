@@ -3,6 +3,7 @@ import express from "express";
 import {
     changeCustomerStatus,
     createCustomer,
+    editCustomer,
     getAllCustomers,
     getSingleCustomer,
 } from "../controllers/customersController.js";
@@ -108,6 +109,8 @@ router.get("/:id", protect, getSingleCustomer);
  *         description: Unauthorized
  */
 router.post("/", protect, createCustomer);
+
+router.patch("/:id", protect, editCustomer);
 
 /**
  * @openapi

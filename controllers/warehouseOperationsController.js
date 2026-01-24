@@ -2,11 +2,19 @@ import Warehouse from "../models/warehousesSchema.js";
 import Product from "../models/productsSchema.js";
 import WarehouseTransaction from "../models/warehouseTransactionsSchema.js";
 
+const normalizeQuantity = (value) => {
+    const qty = Number(value);
+    if (!Number.isFinite(qty) || qty <= 0) {
+        throw new Error("Quantity must be a positive number");
+    }
+    return qty;
+};
+
 async function adjustStock({ warehouse, productId, lotSerial, quantity, quality, type }) {
     // Find existing stock item (by product + lot if provided)
     const existingIndex = warehouse.stock.findIndex(
         (s) =>
-            s.productId.toString() === productId.toString() && (lotSerial ? s.lotSerial === lotSerial : true)
+            s.productId.toString() === productId.toString() && (lotSerial ? s.lotSerial === lotSerial : true),
     );
 
     if (type === "GRN") {
@@ -42,6 +50,13 @@ export const createGRN = async (req, res) => {
             return res.status(400).json({ message: "warehouseId, productId and quantity are required" });
         }
 
+        let normalizedQuantity;
+        try {
+            normalizedQuantity = normalizeQuantity(quantity);
+        } catch (e) {
+            return res.status(400).json({ message: e.message });
+        }
+
         const warehouse = await Warehouse.findOne({ _id: warehouseId, userId: req.user?._id });
         if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
 
@@ -49,7 +64,14 @@ export const createGRN = async (req, res) => {
         if (!product) return res.status(404).json({ message: "Product not found" });
 
         try {
-            await adjustStock({ warehouse, productId, lotSerial, quantity, quality, type: "GRN" });
+            await adjustStock({
+                warehouse,
+                productId,
+                lotSerial,
+                quantity: normalizedQuantity,
+                quality,
+                type: "GRN",
+            });
         } catch (e) {
             return res.status(400).json({ message: e.message });
         }
@@ -58,7 +80,7 @@ export const createGRN = async (req, res) => {
             type: "GRN",
             productId,
             lotSerial,
-            quantity,
+            quantity: normalizedQuantity,
             date: date || new Date(),
             purchaseOrder,
             notes,
@@ -69,7 +91,7 @@ export const createGRN = async (req, res) => {
             type: "GRN",
             warehouseId,
             productId,
-            quantity,
+            quantity: normalizedQuantity,
             lotSerial,
             quality,
             purchaseOrder,
@@ -92,6 +114,13 @@ export const createDelivery = async (req, res) => {
             return res.status(400).json({ message: "warehouseId, productId and quantity are required" });
         }
 
+        let normalizedQuantity;
+        try {
+            normalizedQuantity = normalizeQuantity(quantity);
+        } catch (e) {
+            return res.status(400).json({ message: e.message });
+        }
+
         const warehouse = await Warehouse.findOne({ _id: warehouseId, userId: req.user?._id });
         if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
 
@@ -99,7 +128,13 @@ export const createDelivery = async (req, res) => {
         if (!product) return res.status(404).json({ message: "Product not found" });
 
         try {
-            await adjustStock({ warehouse, productId, lotSerial, quantity, type: "DELIVERY" });
+            await adjustStock({
+                warehouse,
+                productId,
+                lotSerial,
+                quantity: normalizedQuantity,
+                type: "DELIVERY",
+            });
         } catch (e) {
             return res.status(400).json({ message: e.message });
         }
@@ -108,7 +143,7 @@ export const createDelivery = async (req, res) => {
             type: "DELIVERY",
             productId,
             lotSerial,
-            quantity,
+            quantity: normalizedQuantity,
             date: date || new Date(),
             notes,
         });
@@ -118,7 +153,7 @@ export const createDelivery = async (req, res) => {
             type: "DELIVERY",
             warehouseId,
             productId,
-            quantity,
+            quantity: normalizedQuantity,
             lotSerial,
             notes,
             date: date || new Date(),
@@ -144,6 +179,13 @@ export const createTransfer = async (req, res) => {
             return res.status(400).json({ message: "Source and destination warehouses must differ" });
         }
 
+        let normalizedQuantity;
+        try {
+            normalizedQuantity = normalizeQuantity(quantity);
+        } catch (e) {
+            return res.status(400).json({ message: e.message });
+        }
+
         const fromWh = await Warehouse.findOne({ _id: fromWarehouseId, userId: req.user?._id });
         const toWh = await Warehouse.findOne({ _id: toWarehouseId, userId: req.user?._id });
         if (!fromWh || !toWh) return res.status(404).json({ message: "One or both warehouses not found" });
@@ -153,7 +195,13 @@ export const createTransfer = async (req, res) => {
 
         // Remove from source
         try {
-            await adjustStock({ warehouse: fromWh, productId, lotSerial, quantity, type: "DELIVERY" });
+            await adjustStock({
+                warehouse: fromWh,
+                productId,
+                lotSerial,
+                quantity: normalizedQuantity,
+                type: "DELIVERY",
+            });
         } catch (e) {
             return res.status(400).json({ message: e.message });
         }
@@ -163,7 +211,7 @@ export const createTransfer = async (req, res) => {
                 warehouse: toWh,
                 productId,
                 lotSerial,
-                quantity,
+                quantity: normalizedQuantity,
                 quality: "Accept",
                 type: "GRN",
             });
@@ -177,7 +225,7 @@ export const createTransfer = async (req, res) => {
             fromWarehouseId,
             toWarehouseId,
             productId,
-            quantity,
+            quantity: normalizedQuantity,
             lotSerial,
             notes,
             date: date || new Date(),
@@ -187,7 +235,7 @@ export const createTransfer = async (req, res) => {
             type: "TRANSFER",
             productId,
             lotSerial,
-            quantity: -quantity,
+            quantity: -normalizedQuantity,
             fromWarehouseId,
             toWarehouseId,
             date: date || new Date(),
@@ -197,7 +245,7 @@ export const createTransfer = async (req, res) => {
             type: "TRANSFER",
             productId,
             lotSerial,
-            quantity,
+            quantity: normalizedQuantity,
             fromWarehouseId,
             toWarehouseId,
             date: date || new Date(),
@@ -221,11 +269,11 @@ export const getWarehouseHistory = async (req, res) => {
         if (!warehouseId) return res.status(400).json({ message: "warehouseId is required" });
         const warehouse = await Warehouse.findOne({ _id: warehouseId, userId: req.user?._id }).populate(
             "history.productId",
-            "name SKU"
+            "name SKU",
         );
-        
+
         if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
-        
+
         res.status(200).json({ message: "History retrieved", data: warehouse.history });
     } catch (error) {
         res.status(500).json({ message: "Internal server error." });

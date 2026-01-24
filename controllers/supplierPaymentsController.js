@@ -3,11 +3,8 @@ import Supplier from "../models/suppliersSchema.js";
 
 export const getAllSupplierPayments = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
         const supplierPayments = await SupplierPayment.find({
-            userId: req.user?._id,
-            $text: { $search: searchQuery },
+            userId: req.user?._id
         }).sort({
             createdAt: -1,
         });

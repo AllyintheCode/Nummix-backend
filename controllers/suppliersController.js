@@ -2,11 +2,8 @@ import Supplier from "../models/suppliersSchema.js";
 
 export const getAllSuppliers = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
         const suppliers = await Supplier.find({
             userId: req.user?._id,
-            $text: { $search: searchQuery },
         }).sort({
             createdAt: -1,
         });

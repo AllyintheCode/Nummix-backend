@@ -3,9 +3,7 @@ import Supplier from "../models/suppliersSchema.js";
 
 export const getAllOrders = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
-        const orders = await Order.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
+        const orders = await Order.find({ userId: req.user?._id }).sort({
             createdAt: -1,
         });
 

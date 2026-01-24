@@ -2,11 +2,8 @@ import Inventory from "../models/inventorySchema.js";
 
 export const getAllInventory = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
         const inventory = await Inventory.find({
             userId: req.user?._id,
-            $text: { $search: searchQuery },
         }).sort({
             createdAt: -1,
         });

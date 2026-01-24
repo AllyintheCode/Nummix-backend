@@ -4,7 +4,7 @@ import {
     changePaymentStatus,
     createPayment,
     editPayment,
-    getALLPayments,
+    getAllPayments,
     getSinglePayment,
 } from "../controllers/paymentsController.js";
 import protect from "../middlewares/authMiddleware.js";
@@ -42,7 +42,7 @@ const router = express.Router();
  *         description: No payments found
  */
 
-router.get("/", protect, getALLPayments);
+router.get("/", protect, getAllPayments);
 
 /**
  * @openapi

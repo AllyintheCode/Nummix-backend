@@ -20,6 +20,7 @@ import ordersRoute from "./routes/ordersRoute.js";
 import productsRoute from "./routes/productsRoute.js";
 import warehousesRoute from "./routes/warehousesRoute.js";
 import warehouseOperationsRoute from "./routes/warehouseOperationsRoute.js";
+import paymentsRoute from "./routes/paymentsRoute.js";
 import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
@@ -75,7 +76,6 @@ const options = {
 
 const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
 // --- Routes ---
 // PUBLIC route üçün rate limiter tətbiq edirik
 app.use("/api/users/register", authLimiter);
@@ -83,7 +83,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/cash-bank", cashAndBankRoutes);
-app.use("/api/payments", paymentRoutes);
+app.use("/api/payment", paymentRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/general-ledger", generalLedgerRoutes);
@@ -100,10 +100,9 @@ app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
 app.use("/api/chatbot", chatbotRoute);
+app.use("/api/payments", paymentsRoute);
 
-// --- DB connect ---
 connectDB();
-
 // --- Server ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir 🚀`));

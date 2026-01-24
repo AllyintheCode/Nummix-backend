@@ -1,11 +1,9 @@
 import Customer from "../models/customersSchema.js";
 import Payment from "../models/paymentsSchema.js";
 
-export const getALLPayments = async (req, res) => {
+export const getAllPayments = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
-        const payments = await Payment.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
+        const payments = await Payment.find({ userId: req.user?._id }).sort({
             createdAt: -1,
         });
 

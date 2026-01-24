@@ -3,9 +3,7 @@ import Sale from "../models/salesSchema.js";
 
 export const getAllSales = async (req, res) => {
     try {
-        const searchQuery = req.query.search || "";
-
-        const sales = await Sale.find({ userId: req.user?._id, $text: { $search: searchQuery } }).sort({
+        const sales = await Sale.find({ userId: req.user?._id }).sort({
             createdAt: -1,
         });
 
