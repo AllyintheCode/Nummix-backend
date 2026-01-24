@@ -16,7 +16,7 @@ import {
   addNotification,
   updateNotification,
   deleteNotification,
-  clearNotifications,
+  
   getNotificationsByStatus,
   addLeave,
   downloadExcelEmployees,
@@ -480,7 +480,29 @@ router.post(
   upload.single('file'),protect,
   uploadEmployeeFile
 );
-
+/**
+ * @swagger
+ * /api/employees/by-status:
+ *   get:
+ *     summary: Status-a görə işçiləri gətir
+ *     tags: [Employees]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive, on_leave, terminated]
+ *         description: İşçi statusu
+ *       - in: query
+ *         name: companyId
+ *         schema:
+ *           type: string
+ *         description: Şirkət ID-si
+ *     responses:
+ *       200:
+ *         description: İşçi siyahısı
+ */
+router.get('/by-status', getEmployeesByStatus);
 /**
  * @swagger
  * /api/employees/{id}/file:
@@ -1352,7 +1374,6 @@ router.delete("/:id/notifications/:notificationId",protect, deleteNotification);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.delete("/:id/notifications",protect, clearNotifications);
 
 /**
  * @swagger
@@ -1838,50 +1859,6 @@ router.delete("/:employeeId/attendances/:attendanceId",protect, deleteAttendance
  */
 router.get("/company/:companyId",protect, getEmployeesByCompany);
 
-/**
- * @swagger
- * /api/employees/status/filter:
- *   get:
- *     summary: Statusa görə işçiləri getir
- *     tags: [Employees]
- *     description: İşçiləri status və şirkətə görə filter edir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [active, on_leave, terminated]
- *         description: İşçi statusu
- *       - in: query
- *         name: companyId
- *         schema:
- *           type: string
- *         description: Şirkət ID-si
- *     responses:
- *       200:
- *         description: İşçilər uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Employee'
- *                 count:
- *                   type: number
- *       401:
- *         description: Yetkisiz giriş
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/status/filter",protect, getEmployeesByStatus);
 
 // ===================== DİGƏR ƏMƏLİYYATLAR =====================
 

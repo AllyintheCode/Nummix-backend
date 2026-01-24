@@ -1,14 +1,30 @@
-import User from "../models/User.js";
+// controllers/userController.js
+import {
+  User,
+  Event,
+  Payment,
+  EmployeeFlow,
+  AccountingEntry,
+  AssetCategory,
+  Asset,
+  ExcelReport,
+  PdfReport,
+  CategoryReport,
+  DepartmentReport
+} from "../models/index.js";
 import bcrypt from "bcryptjs";
 import sendEmail from "../utils/sendEmail.js";
 import TaxCalculationService from "../services/taxCalculationService.js";
+import AccountingService from "../services/accountingService.js";
 import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/generateToken.js";
-import jwt from "jsonwebtoken"; // JWT üçün
+import jwt from "jsonwebtoken";
 
-const OTP_EXPIRE_MIN = 5; // OTP 5 dəqiqə sonra bitir
+const OTP_EXPIRE_MIN = 5;
+
+// ===================== 👤 USER AUTH FUNCTIONS =====================
 
 // ✅ Yeni istifadəçi qeydiyyatı
 export const registerUser = async (req, res) => {
@@ -40,7 +56,6 @@ export const registerUser = async (req, res) => {
       message: "OTP göndərildi",
     });
 
-    // 👉 email-i background-da göndər (await YOX)
     sendEmail(
       email,
       "Nummix OTP Təsdiqləmə",
@@ -53,7 +68,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-// OTP təsdiqləmə
+// ✅ OTP təsdiqləmə
 export const verifyOtp = async (req, res) => {
   try {
     const { userId, otp } = req.body;
@@ -86,7 +101,7 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-// OTP yenidən göndərmə
+// ✅ OTP yenidən göndərmə
 export const resendOtp = async (req, res) => {
   try {
     const { userId } = req.body;
@@ -139,7 +154,7 @@ export const loginUser = async (req, res) => {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
 
       if (user.failedLoginAttempts >= 5) {
-        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 dəqiqə blok
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
         user.failedLoginAttempts = 0;
       }
 
@@ -154,7 +169,6 @@ export const loginUser = async (req, res) => {
     if (!user.isVerified)
       return res.status(401).json({ message: "Email təsdiqlənməyib." });
 
-    // Token-lər
     const accessToken = generateAccessToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
 
@@ -171,7 +185,7 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// Qorunan profil route
+// ✅ Qorunan profil route
 export const getProfile = async (req, res) => {
   res.json({
     _id: req.user._id,
@@ -181,7 +195,7 @@ export const getProfile = async (req, res) => {
   });
 };
 
-// Forgot password
+// ✅ Forgot password
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -210,7 +224,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// Refresh token
+// ✅ Refresh token
 export const refreshAccessToken = async (req, res) => {
   try {
     const { token } = req.body;
@@ -234,7 +248,7 @@ export const refreshAccessToken = async (req, res) => {
   }
 };
 
-// Reset password
+// ✅ Reset password
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -253,7 +267,6 @@ export const resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
-
     await user.save();
 
     res.json({ message: "Şifrə uğurla yeniləndi ✅" });
@@ -262,7 +275,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// Bütün istifadəçiləri getir
+// ✅ Bütün istifadəçiləri getir
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select("-password");
@@ -272,7 +285,7 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-// ID ilə istifadəçi getir
+// ✅ ID ilə istifadəçi getir
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
@@ -283,7 +296,7 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// İstifadəçi məlumatlarını yenilə
+// ✅ İstifadəçi məlumatlarını yenilə
 export const updateUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -299,7 +312,7 @@ export const updateUser = async (req, res) => {
     }
 
     if (req.body.password) {
-      user.password = req.body.password; 
+      user.password = req.body.password;
     }
 
     user.fullName = req.body.fullName ?? user.fullName;
@@ -309,7 +322,7 @@ export const updateUser = async (req, res) => {
     await user.save();
 
     res.json({
-      _id: user._id,
+      _id: use.r_id,
       fullName: user.fullName,
       email: user.email,
     });
@@ -318,7 +331,7 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// İstifadəçini sil
+// ✅ İstifadəçini sil
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -336,145 +349,1991 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// ===================== 💰 YENİ VERGİ VƏ ÖDƏNİŞ FUNKSİYALARI =====================
+// ===================== 📅 EVENT FUNCTIONS =====================
 
-// ✅ Əməkhaqqı fondu yenilə
-
-export const updateSalaryFund = async (req, res) => {
+// ✅ Tədbir əlavə et
+export const addEvent = async (req, res) => {
   try {
-    const { month, amount } = req.body;
+    const { title, description, startTime, endTime, location, date, dayOfWeek, status, note } = req.body;
 
-    console.log("🟡 Received month:", month, "Amount:", amount);
+    const event = await Event.create({
+      userId: req.user._id,
+      title,
+      description,
+      startTime,
+      endTime,
+      location,
+      date,
+      dayOfWeek,
+      status,
+      note
+    });
 
-    // ✅ User ID yoxlanışı
-    if (!req.params.id) {
-      return res
-        .status(400)
-        .json({ message: "İstifadəçi ID-si təqdim edilməyib" });
+    res.status(201).json({
+      success: true,
+      data: event,
+      message: "Tədbir uğurla əlavə edildi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Bütün tədbirləri gətir
+export const getEvents = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (startDate && endDate) {
+      filter.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
     }
 
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      console.log("🔴 User not found with ID:", req.params.id);
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    // ✅ AY YOXLANIŞI
-    const validMonths = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-
-    const normalizedMonth = validMonths.find(
-      (m) => m.toLowerCase() === month.toLowerCase()
-    );
-
-    if (!normalizedMonth) {
-      return res.status(400).json({
-        message: "Yanlış ay adı",
-        availableMonths: validMonths,
-        receivedMonth: month,
-      });
-    }
-
-    // ✅ TAXCALCULATION SERVICE İSTİFADƏSİ
-    let companyTaxes;
-    try {
-      companyTaxes = TaxCalculationService.calculateEmployerTaxes(amount);
-      console.log("🟢 Tax calculation successful:", companyTaxes);
-    } catch (taxError) {
-      console.error("🔴 Tax calculation error:", taxError);
-      return res.status(500).json({
-        message: "Vergi hesablanmasında xəta",
-        error: taxError.message,
-      });
-    }
-
-    // Əgər ay mövcud deyilsə, avtomatik yarat
-    if (!user.monthly_total_salary_fund[normalizedMonth]) {
-      user.monthly_total_salary_fund[normalizedMonth] = 0;
-    }
-
-    // Əməkhaqqı fondu yenilə
-    user.monthly_total_salary_fund[normalizedMonth] = amount;
-
-    // Şirkət vergilərini avtomatik hesabla
-    user.company_taxes.dsmf[normalizedMonth] = companyTaxes.employerTaxes.dsmf;
-    user.company_taxes.ish[normalizedMonth] = companyTaxes.employerTaxes.ish;
-    user.company_taxes.its[normalizedMonth] = companyTaxes.employerTaxes.its;
-    user.company_taxes.total_company_taxes[normalizedMonth] =
-      companyTaxes.totalEmployerTaxes;
-
-    // Cari ay ümumi məlumatları yenilə
-    const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
-    if (normalizedMonth === currentMonth) {
-      user.current_month_total.salary_fund = amount;
-      user.current_month_total.company_taxes = companyTaxes.totalEmployerTaxes;
-    }
-
-    await user.save();
-
-    console.log("✅ User saved successfully");
+    const events = await Event.find(filter).sort({ date: 1 });
 
     res.json({
       success: true,
-      month: normalizedMonth,
-      salary_fund: user.monthly_total_salary_fund[normalizedMonth],
-      company_taxes: {
-        dsmf: user.company_taxes.dsmf[normalizedMonth],
-        ish: user.company_taxes.ish[normalizedMonth],
-        its: user.company_taxes.its[normalizedMonth],
-        total: user.company_taxes.total_company_taxes[normalizedMonth],
-      },
-      message: "Əməkhaqqı fondu uğurla yeniləndi",
+      data: events,
+      count: events.length
     });
   } catch (error) {
-    console.error("🔴 Salary fund update error:", error);
-    res.status(500).json({
-      message: error.message,
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Tədbiri yenilə
+export const updateEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const updateData = req.body;
+
+    const event = await Event.findOneAndUpdate(
+      { _id: eventId, userId: req.user._id },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!event) {
+      return res.status(404).json({ message: "Tədbir tapılmadı" });
+    }
+
+    res.json({
+      success: true,
+      data: event,
+      message: "Tədbir uğurla yeniləndi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Tədbiri sil
+export const deleteEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await Event.findOneAndDelete({
+      _id: eventId,
+      userId: req.user._id
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: "Tədbir tapılmadı" });
+    }
+
+    res.json({
+      success: true,
+      message: "Tədbir uğurla silindi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 💰 PAYMENT FUNCTIONS =====================
+
+// ✅ Ödəniş əlavə et
+// ✅ Yeni ödəniş əlavə et (yeni Payment modelinə uyğun)
+export const addPayment = async (req, res) => {
+  try {
+    const { 
+      type,           // "outflow" (xərc) və ya "receipt" (gəlir)
+      supplierName,   // Təchizatçı/Müştəri adı
+      category,       // Kateqoriya (məs: "Əməkhaqqı", "Kommunal", "Ofis ləvazimatları")
+      dueDate,        // Son tarix (format: "2024-01-20")
+      amount,         // Məbləğ
+      currency,       // Valyuta ("AZN", "USD", "RUB", "EUR") - default: "AZN"
+      status,         // Status ("planned", "pending", "overdue", "completed") - default: "planned"
+      description     // Əlavə təsvir (modeldə yoxdur, əlavə edə bilərsiniz)
+    } = req.body;
+
+    // Validation - Modelin tələb etdiyi field-lər
+    const requiredFields = ['type', 'supplierName', 'category', 'dueDate', 'amount'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: `Aşağıdakı field-lər tələb olunur: ${missingFields.join(', ')}`
+      });
+    }
+
+    // Type validation
+    if (!['outflow', 'receipt'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'type yalnız "outflow" və ya "receipt" ola bilər'
+      });
+    }
+
+    // Currency validation
+    if (currency && !['AZN', 'USD', 'RUB', 'EUR'].includes(currency)) {
+      return res.status(400).json({
+        success: false,
+        message: 'currency yalnız "AZN", "USD", "RUB", "EUR" dəyərlərindən biri ola bilər'
+      });
+    }
+
+    // Status validation
+    if (status && !['planned', 'pending', 'overdue', 'completed'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'status yalnız "planned", "pending", "overdue", "completed" dəyərlərindən biri ola bilər'
+      });
+    }
+
+    // Əgər status "completed" verilibsə, completedDate əlavə et
+    const paymentData = {
+      type,
+      supplierName,
+      category,
+      dueDate: new Date(dueDate),
+      amount: parseFloat(amount),
+      currency: currency || 'AZN',
+      status: status || 'planned',
+      createdBy: req.user._id,
+      // Əlavə field (modelə əlavə etmək istəsəniz)
+      ...(description && { description })
+    };
+
+    const payment = await Payment.create(paymentData);
+
+    res.status(201).json({
+      success: true,
+      data: payment,
+      message: "Ödəniş uğurla əlavə edildi"
+    });
+  } catch (error) {
+    console.error('Add payment error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
     });
   }
 };
+
+
+// ✅ Ödənişləri gətir
+// ✅ Ödənişləri gətir (yeni modelə uyğun)
+export const getPayments = async (req, res) => {
+  try {
+    const { 
+      type,           // outflow və ya receipt
+      category,       // kateqoriya
+      status,         // planned, pending, overdue, completed
+      startDate,      // başlama tarixi
+      endDate,        // bitmə tarixi
+      currency,       // valyuta
+      search,         // supplierName axtarışı
+      sortBy = 'dueDate', // sıralama
+      sortOrder = 'asc'   // sıralama istiqaməti
+    } = req.query;
+
+    const filter = { createdBy: req.user._id };
+
+    // Filterləri tətbiq et
+    if (type) filter.type = type;
+    if (category) filter.category = category;
+    if (status) filter.status = status;
+    if (currency) filter.currency = currency;
+    
+    // Tarix filteri
+    if (startDate || endDate) {
+      filter.dueDate = {};
+      if (startDate) filter.dueDate.$gte = new Date(startDate);
+      if (endDate) filter.dueDate.$lte = new Date(endDate);
+    }
+
+    // Axtarış filteri
+    if (search) {
+      filter.supplierName = { $regex: search, $options: 'i' };
+    }
+
+    // Sıralama
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const payments = await Payment.find(filter)
+      .populate('createdBy', 'fullName email')
+      .sort(sort)
+      .skip(skip)
+      .limit(limit);
+
+    const totalPayments = await Payment.countDocuments(filter);
+
+    // Statistikalar
+    const stats = await Payment.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: "$amount" },
+          outflowTotal: {
+            $sum: {
+              $cond: [{ $eq: ["$type", "outflow"] }, "$amount", 0]
+            }
+          },
+          receiptTotal: {
+            $sum: {
+              $cond: [{ $eq: ["$type", "receipt"] }, "$amount", 0]
+            }
+          },
+          byStatus: {
+            $push: {
+              status: "$status",
+              amount: "$amount"
+            }
+          },
+          byCategory: {
+            $push: {
+              category: "$category",
+              amount: "$amount",
+              type: "$type"
+            }
+          }
+        }
+      }
+    ]);
+
+    // Kateqoriya üzrə statistikaları işlə
+    const categoryStats = {};
+    const statusStats = {};
+    
+    if (stats.length > 0) {
+      stats[0].byCategory.forEach(item => {
+        if (!categoryStats[item.category]) {
+          categoryStats[item.category] = {
+            outflow: 0,
+            receipt: 0,
+            total: 0
+          };
+        }
+        categoryStats[item.category][item.type] += item.amount;
+        categoryStats[item.category].total += item.amount;
+      });
+
+      stats[0].byStatus.forEach(item => {
+        if (!statusStats[item.status]) {
+          statusStats[item.status] = 0;
+        }
+        statusStats[item.status] += item.amount;
+      });
+    }
+
+    const summary = stats[0] ? {
+      totalAmount: stats[0].totalAmount,
+      outflowTotal: stats[0].outflowTotal,
+      receiptTotal: stats[0].receiptTotal,
+      netCashFlow: stats[0].receiptTotal - stats[0].outflowTotal,
+      categoryStats,
+      statusStats,
+      count: totalPayments
+    } : {
+      totalAmount: 0,
+      outflowTotal: 0,
+      receiptTotal: 0,
+      netCashFlow: 0,
+      categoryStats: {},
+      statusStats: {},
+      count: 0
+    };
+
+    res.json({
+      success: true,
+      data: payments,
+      pagination: {
+        page,
+        limit,
+        total: totalPayments,
+        pages: Math.ceil(totalPayments / limit)
+      },
+      summary,
+      filters: {
+        type,
+        category,
+        status,
+        startDate,
+        endDate,
+        currency,
+        search
+      }
+    });
+  } catch (error) {
+    console.error('Get payments error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+// ✅ Ödəniş statusunu yenilə
+export const updatePaymentStatus = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { status } = req.body;
+
+    if (!['planned', 'pending', 'overdue', 'completed'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Yalnız "planned", "pending", "overdue", "completed" statusları dəyişdirilə bilər'
+      });
+    }
+
+    const payment = await Payment.findOneAndUpdate(
+      { _id: paymentId, createdBy: req.user._id },
+      { 
+        status,
+        ...(status === 'completed' && { completedAt: new Date() })
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ödəniş tapılmadı'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: payment,
+      message: 'Ödəniş statusu yeniləndi'
+    });
+  } catch (error) {
+    console.error('Update payment status error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ✅ Ödəniş məlumatlarını yenilə
+export const updatePayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const updateData = req.body;
+
+    // Əgər amount yenilənirsə, rəqəmə çevir
+    if (updateData.amount) {
+      updateData.amount = parseFloat(updateData.amount);
+    }
+
+    // Əgər dueDate yenilənirsə, Date obyektinə çevir
+    if (updateData.dueDate) {
+      updateData.dueDate = new Date(updateData.dueDate);
+    }
+
+    const payment = await Payment.findOneAndUpdate(
+      { _id: paymentId, createdBy: req.user._id },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ödəniş tapılmadı'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: payment,
+      message: 'Ödəniş məlumatları yeniləndi'
+    });
+  } catch (error) {
+    console.error('Update payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ✅ Ödənişi sil
+export const deletePayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    const payment = await Payment.findOneAndDelete({
+      _id: paymentId,
+      createdBy: req.user._id
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ödəniş tapılmadı'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Ödəniş uğurla silindi'
+    });
+  } catch (error) {
+    console.error('Delete payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ===================== 👥 EMPLOYEE FLOW FUNCTIONS =====================
+
+// ✅ İşçi axını qeydi əlavə et
+export const addEmployeeFlow = async (req, res) => {
+  try {
+    const { employeeId, type, date, department, position, reason, notes } = req.body;
+
+    const employeeFlow = await EmployeeFlow.create({
+      userId: req.user._id,
+      employeeId,
+      type,
+      date,
+      department,
+      position,
+      reason,
+      notes
+    });
+
+    res.status(201).json({
+      success: true,
+      data: employeeFlow,
+      message: "İşçi axını qeydi əlavə edildi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ İşçi axını qeydlərini gətir
+export const getEmployeeFlows = async (req, res) => {
+  try {
+    const { type, startDate, endDate, employeeId } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (type) filter.type = type;
+    if (employeeId) filter.employeeId = employeeId;
+    if (startDate && endDate) {
+      filter.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    const flows = await EmployeeFlow.find(filter)
+      .populate('employeeId', 'name email')
+      .sort({ date: -1 });
+
+    res.json({
+      success: true,
+      data: flows,
+      count: flows.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 📊 ACCOUNTING FUNCTIONS =====================
+
+// ✅ MÜHASİBAT YAZILIŞI ƏLAVƏ ET
+export const addAccountingEntry = async (req, res) => {
+  try {
+    const { accountCode, amount, type, description, documentNumber, date } = req.body;
+
+    const accountInfo = AccountingService.getAccountInfo(accountCode);
+    if (!accountInfo) {
+      return res.status(400).json({ message: "Yanlış hesab kodu" });
+    }
+
+    const validation = AccountingService.validateAccountingEntry({
+      accountCode,
+      amount,
+      type,
+      documentNumber,
+    });
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        message: "Validation xətası",
+        errors: validation.errors,
+      });
+    }
+
+    const accountingEntry = await AccountingEntry.create({
+      userId: req.user._id,
+      accountCode,
+      accountName: accountInfo.name,
+      amount,
+      type,
+      description,
+      documentNumber,
+      date: date || new Date(),
+      status: "posted",
+    });
+
+    res.status(201).json({
+      success: true,
+      data: accountingEntry,
+      message: "Mühasibat yazılışı uğurla əlavə edildi",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ BÜTÜN MÜHASİBAT YAZILIŞLARINI GƏTİR
+export const getAccountingEntries = async (req, res) => {
+  try {
+    const { startDate, endDate, accountCode, type, status } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (startDate) filter.date = { $gte: new Date(startDate) };
+    if (endDate) {
+      filter.date = filter.date || {};
+      filter.date.$lte = new Date(endDate);
+    }
+    if (accountCode) filter.accountCode = accountCode;
+    if (type) filter.type = type;
+    if (status) filter.status = status;
+
+    const entries = await AccountingEntry.find(filter).sort({ date: -1 });
+
+    const balances = AccountingService.calculateAllBalances(entries);
+
+    res.json({
+      success: true,
+      data: entries,
+      balances: balances.balances,
+      summary: balances.summary,
+      count: entries.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ MÜHASİBAT YAZILIŞINI SİL
+export const deleteAccountingEntry = async (req, res) => {
+  try {
+    const { entryId } = req.params;
+
+    const entry = await AccountingEntry.findOneAndDelete({
+      _id: entryId,
+      userId: req.user._id
+    });
+
+    if (!entry) {
+      return res.status(404).json({ message: "Yazılış tapılmadı" });
+    }
+
+    res.json({
+      success: true,
+      message: "Mühasibat yazılışı uğurla silindi",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 🏢 ASSET CATEGORY FUNCTIONS =====================
+
+// ✅ AssetCategory əlavə et
+export const addAssetCategory = async (req, res) => {
+  try {
+    const { name, description, amortizationRate } = req.body;
+
+    const existingCategory = await AssetCategory.findOne({
+      userId: req.user._id,
+      name: { $regex: new RegExp(`^${name}$`, 'i') }
+    });
+
+    if (existingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Bu adla kateqoriya artıq mövcuddur"
+      });
+    }
+
+    const category = await AssetCategory.create({
+      userId: req.user._id,
+      name,
+      description,
+      amortizationRate: amortizationRate || 0,
+      isActive: true
+    });
+
+    res.status(201).json({
+      success: true,
+      data: category,
+      message: "Kateqoriya uğurla əlavə edildi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ AssetCategory-ləri gətir
+export const getAssetCategories = async (req, res) => {
+  try {
+    const { activeOnly = "true", search } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (activeOnly === "true") {
+      filter.isActive = true;
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const categories = await AssetCategory.find(filter).sort({ name: 1 });
+
+    const categoriesWithStats = await Promise.all(
+      categories.map(async (category) => {
+        const assetCount = await Asset.countDocuments({
+          userId: req.user._id,
+          category: category.name,
+          status: "Aktiv"
+        });
+        
+        const assets = await Asset.find({
+          userId: req.user._id,
+          category: category.name,
+          status: "Aktiv"
+        }).limit(5);
+
+        const totalValue = assets.reduce((sum, asset) => sum + asset.currentValue, 0);
+
+        return {
+          ...category.toObject(),
+          assetCount,
+          totalValue,
+          recentAssets: assets.map(asset => ({
+            id: asset._id,
+            name: asset.name,
+            currentValue: asset.currentValue
+          }))
+        };
+      })
+    );
+
+    const totalCategories = categories.length;
+    const activeCategories = categories.filter(c => c.isActive).length;
+    const totalAssets = await Asset.countDocuments({ userId: req.user._id, status: "Aktiv" });
+
+    res.json({
+      success: true,
+      data: categoriesWithStats,
+      summary: {
+        totalCategories,
+        activeCategories,
+        inactiveCategories: totalCategories - activeCategories,
+        totalAssets
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ AssetCategory-i yenilə
+export const updateAssetCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const updateData = req.body;
+
+    const category = await AssetCategory.findOneAndUpdate(
+      { _id: categoryId, userId: req.user._id },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!category) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Kateqoriya tapılmadı" 
+      });
+    }
+
+    if (updateData.name && updateData.name !== category.name) {
+      await Asset.updateMany(
+        { 
+          userId: req.user._id, 
+          category: category.name 
+        },
+        { $set: { category: updateData.name } }
+      );
+    }
+
+    res.json({
+      success: true,
+      data: category,
+      message: "Kateqoriya uğurla yeniləndi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ AssetCategory-i sil
+export const deleteAssetCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+
+    const assetsUsingCategory = await Asset.findOne({
+      userId: req.user._id,
+      categoryId: categoryId,
+      status: "Aktiv"
+    });
+
+    if (assetsUsingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Bu kateqoriya istifadə olunur. Silə bilməzsiniz."
+      });
+    }
+
+    const category = await AssetCategory.findOneAndUpdate(
+      { _id: categoryId, userId: req.user._id },
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!category) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Kateqoriya tapılmadı" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Kateqoriya uğurla deaktiv edildi",
+      data: category
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Kateqoriya üzrə asset-ləri gətir
+export const getAssetsByCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { status } = req.query;
+
+    const category = await AssetCategory.findOne({
+      _id: categoryId,
+      userId: req.user._id
+    });
+
+    if (!category) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Kateqoriya tapılmadı" 
+      });
+    }
+
+    const filter = { 
+      userId: req.user._id,
+      category: category.name 
+    };
+
+    if (status) {
+      filter.status = status;
+    }
+
+    const assets = await Asset.find(filter).sort({ purchaseDate: -1 });
+
+    const stats = {
+      totalAssets: assets.length,
+      activeAssets: assets.filter(a => a.status === "Aktiv").length,
+      totalInitialValue: assets.reduce((sum, a) => sum + a.initialValue, 0),
+      totalCurrentValue: assets.reduce((sum, a) => sum + a.currentValue, 0),
+      totalAmortization: assets.reduce((sum, a) => sum + a.amortization, 0),
+      byStatus: {
+        Aktiv: assets.filter(a => a.status === "Aktiv").length,
+        Passiv: assets.filter(a => a.status === "Passiv").length,
+        "Satılıb": assets.filter(a => a.status === "Satılıb").length,
+        "Sıradan çıxıb": assets.filter(a => a.status === "Sıradan çıxıb").length
+      }
+    };
+
+    res.json({
+      success: true,
+      category: category,
+      data: assets,
+      stats: stats,
+      count: assets.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 📈 ASSET FUNCTIONS =====================
+
+// ✅ Asset əlavə et
+export const addAsset = async (req, res) => {
+  try {
+    const assetData = req.body;
+
+    const asset = await Asset.create({
+      userId: req.user._id,
+      ...assetData
+    });
+
+    res.status(201).json({
+      success: true,
+      data: asset,
+      message: "Əsas vəsait uğurla əlavə edildi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Asset-ləri gətir
+export const getAssets = async (req, res) => {
+  try {
+    const { category, status, location } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (category) filter.category = category;
+    if (status) filter.status = status;
+    if (location) filter.location = location;
+
+    const assets = await Asset.find(filter).sort({ purchaseDate: -1 });
+
+    const stats = {
+      totalAssets: assets.length,
+      totalInitialValue: assets.reduce((sum, a) => sum + a.initialValue, 0),
+      totalCurrentValue: assets.reduce((sum, a) => sum + a.currentValue, 0),
+      totalAmortization: assets.reduce((sum, a) => sum + a.amortization, 0),
+      activeAssets: assets.filter(a => a.status === "Aktiv").length
+    };
+
+    res.json({
+      success: true,
+      data: assets,
+      stats,
+      count: assets.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Asset-i yenilə
+export const updateAsset = async (req, res) => {
+  try {
+    const { assetId } = req.params;
+    const updateData = req.body;
+
+    const asset = await Asset.findOneAndUpdate(
+      { _id: assetId, userId: req.user._id },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!asset) {
+      return res.status(404).json({ message: "Əsas vəsait tapılmadı" });
+    }
+
+    res.json({
+      success: true,
+      data: asset,
+      message: "Əsas vəsait uğurla yeniləndi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Vəsait statistikalarını gətir
+export const getAssetStatistics = async (req, res) => {
+  try {
+    const assets = await Asset.find({ userId: req.user._id });
+    const categories = await AssetCategory.find({ userId: req.user._id, isActive: true });
+
+    const activeAssets = assets.filter(a => a.status === "Aktiv");
+    const totalInitialValue = activeAssets.reduce((sum, a) => sum + a.initialValue, 0);
+    const totalCurrentValue = activeAssets.reduce((sum, a) => sum + a.currentValue, 0);
+    const totalAmortization = activeAssets.reduce((sum, a) => sum + a.amortization, 0);
+
+    const locationStats = {};
+    activeAssets.forEach(asset => {
+      if (!locationStats[asset.location]) {
+        locationStats[asset.location] = {
+          count: 0,
+          value: 0
+        };
+      }
+      locationStats[asset.location].count++;
+      locationStats[asset.location].value += asset.currentValue;
+    });
+
+    const categoryStats = {};
+    activeAssets.forEach(asset => {
+      if (!categoryStats[asset.category]) {
+        categoryStats[asset.category] = {
+          count: 0,
+          value: 0,
+          amortization: 0
+        };
+      }
+      categoryStats[asset.category].count++;
+      categoryStats[asset.category].value += asset.currentValue;
+      categoryStats[asset.category].amortization += asset.amortization;
+    });
+
+    const statusStats = {};
+    assets.forEach(asset => {
+      if (!statusStats[asset.status]) {
+        statusStats[asset.status] = 0;
+      }
+      statusStats[asset.status]++;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          totalAssets: assets.length,
+          activeAssets: activeAssets.length,
+          totalInitialValue,
+          totalCurrentValue,
+          totalAmortization,
+          averageAmortizationPercentage: totalInitialValue > 0 
+            ? (totalAmortization / totalInitialValue * 100).toFixed(2)
+            : 0,
+          valueRetention: totalInitialValue > 0 
+            ? (totalCurrentValue / totalInitialValue * 100).toFixed(2)
+            : 0
+        },
+        byLocation: Object.entries(locationStats).map(([location, stats]) => ({
+          location,
+          count: stats.count,
+          value: stats.value,
+          percentage: totalCurrentValue > 0 
+            ? (stats.value / totalCurrentValue * 100).toFixed(2)
+            : 0
+        })).sort((a, b) => b.value - a.value),
+        byCategory: Object.entries(categoryStats).map(([category, stats]) => ({
+          category,
+          count: stats.count,
+          value: stats.value,
+          amortization: stats.amortization,
+          amortizationPercentage: stats.value > 0 
+            ? (stats.amortization / stats.value * 100).toFixed(2)
+            : 0
+        })).sort((a, b) => b.value - a.value),
+        byStatus: Object.entries(statusStats).map(([status, count]) => ({
+          status,
+          count,
+          percentage: assets.length > 0 ? (count / assets.length * 100).toFixed(2) : 0
+        })),
+        categoryList: categories.map(cat => ({
+          id: cat._id,
+          name: cat.name,
+          description: cat.description,
+          amortizationRate: cat.amortizationRate
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Vəsait axtarışı
+export const searchAssets = async (req, res) => {
+  try {
+    const { 
+      query, 
+      category, 
+      location, 
+      status,
+      minValue, 
+      maxValue,
+      dateFrom,
+      dateTo
+    } = req.query;
+
+    const filter = { userId: req.user._id };
+
+    if (query) {
+      filter.$or = [
+        { name: { $regex: query, $options: 'i' } },
+        { inventoryNumber: { $regex: query, $options: 'i' } },
+        { category: { $regex: query, $options: 'i' } },
+        { location: { $regex: query, $options: 'i' } },
+        { notes: { $regex: query, $options: 'i' } }
+      ];
+    }
+
+    if (category) filter.category = category;
+    if (location) filter.location = location;
+    if (status) filter.status = status;
+    
+    if (minValue || maxValue) {
+      filter.currentValue = {};
+      if (minValue) filter.currentValue.$gte = parseFloat(minValue);
+      if (maxValue) filter.currentValue.$lte = parseFloat(maxValue);
+    }
+
+    if (dateFrom || dateTo) {
+      filter.purchaseDate = {};
+      if (dateFrom) filter.purchaseDate.$gte = new Date(dateFrom);
+      if (dateTo) filter.purchaseDate.$lte = new Date(dateTo);
+    }
+
+    const assets = await Asset.find(filter)
+      .sort({ currentValue: -1 })
+      .limit(100);
+
+    const totalValue = assets.reduce((sum, a) => sum + a.currentValue, 0);
+
+    res.json({
+      success: true,
+      data: assets,
+      summary: {
+        count: assets.length,
+        totalValue,
+        averageValue: assets.length > 0 ? (totalValue / assets.length).toFixed(2) : 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 📋 CATEGORY REPORT FUNCTIONS =====================
+
+// ✅ Kateqoriya hesabatı yarat
+export const createCategoryReport = async (req, res) => {
+  try {
+    const { title, description, dateFrom, dateTo, categories } = req.body;
+
+    const assetFilter = { userId: req.user._id, status: "Aktiv" };
+    
+    if (dateFrom && dateTo) {
+      assetFilter.purchaseDate = {
+        $gte: new Date(dateFrom),
+        $lte: new Date(dateTo)
+      };
+    }
+
+    if (categories && categories.length > 0) {
+      assetFilter.category = { $in: categories };
+    }
+
+    const assets = await Asset.find(assetFilter);
+
+    const categoryMap = new Map();
+
+    assets.forEach((asset) => {
+      if (!categoryMap.has(asset.category)) {
+        categoryMap.set(asset.category, {
+          assetCount: 0,
+          initialValue: 0,
+          currentValue: 0,
+          amortization: 0,
+        });
+      }
+
+      const category = categoryMap.get(asset.category);
+      category.assetCount += 1;
+      category.initialValue += asset.initialValue;
+      category.currentValue += asset.currentValue;
+      category.amortization += asset.amortization;
+    });
+
+    const data = Array.from(categoryMap.entries()).map(([category, stats]) => {
+      const amortizationPercentage =
+        stats.initialValue > 0
+          ? (stats.amortization / stats.initialValue) * 100
+          : 0;
+
+      return {
+        category,
+        assetCount: stats.assetCount,
+        initialValue: stats.initialValue,
+        currentValue: stats.currentValue,
+        amortization: stats.amortization,
+        amortizationPercentage: Number(amortizationPercentage.toFixed(2)),
+      };
+    });
+
+    const summary = {
+      totalAssets: data.reduce((sum, item) => sum + item.assetCount, 0),
+      totalInitialValue: data.reduce((sum, item) => sum + item.initialValue, 0),
+      totalCurrentValue: data.reduce((sum, item) => sum + item.currentValue, 0),
+      totalAmortization: data.reduce((sum, item) => sum + item.amortization, 0),
+      averageAmortizationPercentage:
+        data.length > 0
+          ? data.reduce((sum, item) => sum + item.amortizationPercentage, 0) /
+            data.length
+          : 0,
+    };
+
+    const report = await CategoryReport.create({
+      userId: req.user._id,
+      title: title || "Kateqoriya Hesabatı",
+      description: description || "Kateqoriyalar üzrə vəsait analizi",
+      generatedAt: new Date(),
+      data,
+      summary,
+      filters: {
+        dateFrom: dateFrom ? new Date(dateFrom) : null,
+        dateTo: dateTo ? new Date(dateTo) : null,
+        categories: categories || []
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: report,
+      message: "Kateqoriya hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Kateqoriya hesabatlarını gətir
+export const getCategoryReports = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (startDate) filter.generatedAt = { $gte: new Date(startDate) };
+    if (endDate) {
+      filter.generatedAt = filter.generatedAt || {};
+      filter.generatedAt.$lte = new Date(endDate);
+    }
+
+    const reports = await CategoryReport.find(filter).sort({ generatedAt: -1 });
+
+    const summary = {
+      totalReports: reports.length,
+      totalAssetsCovered: reports.reduce((sum, r) => sum + r.summary.totalAssets, 0),
+      totalValueCovered: reports.reduce((sum, r) => sum + r.summary.totalCurrentValue, 0),
+      averageAmortization: reports.length > 0 
+        ? reports.reduce((sum, r) => sum + r.summary.averageAmortizationPercentage, 0) / reports.length
+        : 0
+    };
+
+    res.json({
+      success: true,
+      data: reports,
+      summary,
+      count: reports.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Kateqoriya hesabatını gətir (ID ilə)
+export const getCategoryReportById = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await CategoryReport.findOne({
+      _id: reportId,
+      userId: req.user._id
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Hesabat tapılmadı"
+      });
+    }
+
+    const currentAssets = await Asset.find({
+      userId: req.user._id,
+      status: "Aktiv"
+    });
+
+    const currentCategoryMap = new Map();
+    currentAssets.forEach(asset => {
+      if (!currentCategoryMap.has(asset.category)) {
+        currentCategoryMap.set(asset.category, {
+          assetCount: 0,
+          currentValue: 0
+        });
+      }
+      const cat = currentCategoryMap.get(asset.category);
+      cat.assetCount += 1;
+      cat.currentValue += asset.currentValue;
+    });
+
+    const comparisonData = report.data.map(item => {
+      const current = currentCategoryMap.get(item.category) || { assetCount: 0, currentValue: 0 };
+      return {
+        ...item.toObject(),
+        currentAssetCount: current.assetCount,
+        currentValue: current.currentValue,
+        assetChange: current.assetCount - item.assetCount,
+        valueChange: current.currentValue - item.currentValue,
+        valueChangePercentage: item.currentValue > 0 
+          ? ((current.currentValue - item.currentValue) / item.currentValue * 100).toFixed(2)
+          : 0
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...report.toObject(),
+        comparisonData,
+        currentSummary: {
+          totalAssets: currentAssets.length,
+          totalCurrentValue: currentAssets.reduce((sum, a) => sum + a.currentValue, 0)
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Kateqoriya hesabatını sil
+export const deleteCategoryReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await CategoryReport.findOneAndDelete({
+      _id: reportId,
+      userId: req.user._id
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Hesabat tapılmadı"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Kateqoriya hesabatı uğurla silindi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Real-time kateqoriya hesabatı yarat
+export const generateRealTimeCategoryReport = async (req, res) => {
+  try {
+    const { categories } = req.body;
+
+    const filter = { userId: req.user._id, status: "Aktiv" };
+    if (categories && categories.length > 0) {
+      filter.category = { $in: categories };
+    }
+
+    const assets = await Asset.find(filter);
+
+    const categoryMap = new Map();
+    const locationMap = new Map();
+
+    assets.forEach((asset) => {
+      if (!categoryMap.has(asset.category)) {
+        categoryMap.set(asset.category, {
+          assetCount: 0,
+          initialValue: 0,
+          currentValue: 0,
+          amortization: 0,
+        });
+      }
+      const cat = categoryMap.get(asset.category);
+      cat.assetCount += 1;
+      cat.initialValue += asset.initialValue;
+      cat.currentValue += asset.currentValue;
+      cat.amortization += asset.amortization;
+
+      if (!locationMap.has(asset.location)) {
+        locationMap.set(asset.location, {
+          assetCount: 0,
+          currentValue: 0,
+          categories: new Set()
+        });
+      }
+      const loc = locationMap.get(asset.location);
+      loc.assetCount += 1;
+      loc.currentValue += asset.currentValue;
+      loc.categories.add(asset.category);
+    });
+
+    const categoryData = Array.from(categoryMap.entries()).map(([category, stats]) => {
+      const amortizationPercentage =
+        stats.initialValue > 0
+          ? (stats.amortization / stats.initialValue) * 100
+          : 0;
+
+      return {
+        category,
+        assetCount: stats.assetCount,
+        initialValue: stats.initialValue,
+        currentValue: stats.currentValue,
+        amortization: stats.amortization,
+        amortizationPercentage: Number(amortizationPercentage.toFixed(2)),
+      };
+    });
+
+    const locationData = Array.from(locationMap.entries()).map(([location, stats]) => ({
+      location,
+      assetCount: stats.assetCount,
+      currentValue: stats.currentValue,
+      categoryCount: stats.categories.size,
+      categories: Array.from(stats.categories)
+    }));
+
+    const summary = {
+      totalAssets: assets.length,
+      totalInitialValue: assets.reduce((sum, a) => sum + a.initialValue, 0),
+      totalCurrentValue: assets.reduce((sum, a) => sum + a.currentValue, 0),
+      totalAmortization: assets.reduce((sum, a) => sum + a.amortization, 0),
+      averageAmortizationPercentage:
+        assets.length > 0
+          ? (assets.reduce((sum, a) => sum + a.amortization, 0) /
+             assets.reduce((sum, a) => sum + a.initialValue, 0)) * 100
+          : 0,
+      uniqueCategories: categoryMap.size,
+      uniqueLocations: locationMap.size
+    };
+
+    res.json({
+      success: true,
+      data: {
+        categoryData,
+        locationData,
+        summary,
+        generatedAt: new Date()
+      },
+      message: "Real-time kateqoriya hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 🏢 DEPARTMENT REPORT FUNCTIONS =====================
+
+// ✅ Şöbə hesabatı yarat
+export const createDepartmentReport = async (req, res) => {
+  try {
+    const { title, description, locations, dateFrom, dateTo } = req.body;
+
+    const filter = { userId: req.user._id, status: "Aktiv" };
+    
+    if (locations && locations.length > 0) {
+      filter.location = { $in: locations };
+    }
+    
+    if (dateFrom && dateTo) {
+      filter.purchaseDate = {
+        $gte: new Date(dateFrom),
+        $lte: new Date(dateTo)
+      };
+    }
+
+    const assets = await Asset.find(filter);
+
+    const locationMap = new Map();
+    const categoryMap = new Map();
+
+    assets.forEach((asset) => {
+      if (!locationMap.has(asset.location)) {
+        locationMap.set(asset.location, {
+          assetCount: 0,
+          initialValue: 0,
+          currentValue: 0,
+          categories: new Set()
+        });
+      }
+      const loc = locationMap.get(asset.location);
+      loc.assetCount += 1;
+      loc.initialValue += asset.initialValue;
+      loc.currentValue += asset.currentValue;
+      loc.categories.add(asset.category);
+
+      if (!categoryMap.has(asset.category)) {
+        categoryMap.set(asset.category, {
+          assetCount: 0,
+          currentValue: 0,
+          locations: new Set()
+        });
+      }
+      const cat = categoryMap.get(asset.category);
+      cat.assetCount += 1;
+      cat.currentValue += asset.currentValue;
+      cat.locations.add(asset.location);
+    });
+
+    const data = Array.from(locationMap.entries()).map(([location, stats]) => {
+      const percentage = locationMap.size > 0 
+        ? (stats.currentValue / Array.from(locationMap.values()).reduce((sum, l) => sum + l.currentValue, 0)) * 100
+        : 0;
+
+      return {
+        location,
+        assetCount: stats.assetCount,
+        initialValue: stats.initialValue,
+        currentValue: stats.currentValue,
+        percentage: Number(percentage.toFixed(2)),
+        categories: Array.from(stats.categories)
+      };
+    });
+
+    const categoryDistribution = Array.from(categoryMap.entries()).map(([category, stats]) => ({
+      category,
+      assetCount: stats.assetCount,
+      currentValue: stats.currentValue,
+      locations: Array.from(stats.locations)
+    }));
+
+    const summary = {
+      totalAssets: assets.length,
+      totalInitialValue: assets.reduce((sum, a) => sum + a.initialValue, 0),
+      totalCurrentValue: assets.reduce((sum, a) => sum + a.currentValue, 0),
+      uniqueLocations: locationMap.size,
+      uniqueCategories: categoryMap.size
+    };
+
+    const report = await DepartmentReport.create({
+      userId: req.user._id,
+      title: title || "Şöbə Hesabatı",
+      description: description || "Şöbələr üzrə vəsait analizi",
+      generatedAt: new Date(),
+      data,
+      categoryDistribution,
+      summary,
+      filters: {
+        dateFrom: dateFrom ? new Date(dateFrom) : null,
+        dateTo: dateTo ? new Date(dateTo) : null,
+        locations: locations || []
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: report,
+      message: "Şöbə hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Şöbə hesabatlarını gətir
+export const getDepartmentReports = async (req, res) => {
+  try {
+    const { location, startDate, endDate } = req.query;
+    const filter = { userId: req.user._id };
+
+    if (location) {
+      filter['data.location'] = location;
+    }
+    
+    if (startDate) filter.generatedAt = { $gte: new Date(startDate) };
+    if (endDate) {
+      filter.generatedAt = filter.generatedAt || {};
+      filter.generatedAt.$lte = new Date(endDate);
+    }
+
+    const reports = await DepartmentReport.find(filter).sort({ generatedAt: -1 });
+
+    const locationTrends = {};
+    reports.forEach(report => {
+      report.data.forEach(item => {
+        if (!locationTrends[item.location]) {
+          locationTrends[item.location] = [];
+        }
+        locationTrends[item.location].push({
+          date: report.generatedAt,
+          value: item.currentValue,
+          assetCount: item.assetCount
+        });
+      });
+    });
+
+    const summary = {
+      totalReports: reports.length,
+      locationsCovered: Object.keys(locationTrends).length,
+      totalAssetsCovered: reports.reduce((sum, r) => sum + r.summary.totalAssets, 0),
+      totalValueCovered: reports.reduce((sum, r) => sum + r.summary.totalCurrentValue, 0)
+    };
+
+    res.json({
+      success: true,
+      data: reports,
+      locationTrends,
+      summary,
+      count: reports.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Şöbə hesabatını gətir (ID ilə)
+export const getDepartmentReportById = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await DepartmentReport.findOne({
+      _id: reportId,
+      userId: req.user._id
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Hesabat tapılmadı"
+      });
+    }
+
+    const currentAssets = await Asset.find({
+      userId: req.user._id,
+      status: "Aktiv"
+    });
+
+    const currentLocationMap = new Map();
+    currentAssets.forEach(asset => {
+      if (!currentLocationMap.has(asset.location)) {
+        currentLocationMap.set(asset.location, {
+          assetCount: 0,
+          currentValue: 0
+        });
+      }
+      const loc = currentLocationMap.get(asset.location);
+      loc.assetCount += 1;
+      loc.currentValue += asset.currentValue;
+    });
+
+    const comparisonData = report.data.map(item => {
+      const current = currentLocationMap.get(item.location) || { assetCount: 0, currentValue: 0 };
+      return {
+        ...item.toObject(),
+        currentAssetCount: current.assetCount,
+        currentValue: current.currentValue,
+        assetChange: current.assetCount - item.assetCount,
+        valueChange: current.currentValue - item.currentValue,
+        valueChangePercentage: item.currentValue > 0 
+          ? ((current.currentValue - item.currentValue) / item.currentValue * 100).toFixed(2)
+          : 0
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...report.toObject(),
+        comparisonData,
+        currentSummary: {
+          totalAssets: currentAssets.length,
+          totalCurrentValue: currentAssets.reduce((sum, a) => sum + a.currentValue, 0),
+          uniqueLocations: currentLocationMap.size
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Şöbə hesabatını sil
+export const deleteDepartmentReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await DepartmentReport.findOneAndDelete({
+      _id: reportId,
+      userId: req.user._id
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Hesabat tapılmadı"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Şöbə hesabatı uğurla silindi"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Real-time şöbə hesabatı
+export const generateRealTimeDepartmentReport = async (req, res) => {
+  try {
+    const { locations } = req.body;
+
+    const filter = { userId: req.user._id, status: "Aktiv" };
+    if (locations && locations.length > 0) {
+      filter.location = { $in: locations };
+    }
+
+    const assets = await Asset.find(filter);
+
+    const locationStats = {};
+    const categoryByLocation = {};
+    const locationTotals = {
+      totalAssets: 0,
+      totalValue: 0
+    };
+
+    assets.forEach(asset => {
+      if (!locationStats[asset.location]) {
+        locationStats[asset.location] = {
+          assetCount: 0,
+          totalValue: 0,
+          categories: {}
+        };
+      }
+      
+      locationStats[asset.location].assetCount++;
+      locationStats[asset.location].totalValue += asset.currentValue;
+      locationTotals.totalAssets++;
+      locationTotals.totalValue += asset.currentValue;
+
+      if (!locationStats[asset.location].categories[asset.category]) {
+        locationStats[asset.location].categories[asset.category] = {
+          count: 0,
+          value: 0
+        };
+      }
+      locationStats[asset.location].categories[asset.category].count++;
+      locationStats[asset.location].categories[asset.category].value += asset.currentValue;
+
+      if (!categoryByLocation[asset.category]) {
+        categoryByLocation[asset.category] = {
+          totalValue: 0,
+          locations: {}
+        };
+      }
+      categoryByLocation[asset.category].totalValue += asset.currentValue;
+      
+      if (!categoryByLocation[asset.category].locations[asset.location]) {
+        categoryByLocation[asset.category].locations[asset.location] = 0;
+      }
+      categoryByLocation[asset.category].locations[asset.location]++;
+    });
+
+    const locationData = Object.entries(locationStats).map(([location, stats]) => ({
+      location,
+      assetCount: stats.assetCount,
+      currentValue: stats.totalValue,
+      percentage: locationTotals.totalValue > 0 
+        ? (stats.totalValue / locationTotals.totalValue * 100).toFixed(2)
+        : 0,
+      categories: Object.entries(stats.categories).map(([category, catStats]) => ({
+        category,
+        count: catStats.count,
+        value: catStats.value,
+        percentage: stats.totalValue > 0 
+          ? (catStats.value / stats.totalValue * 100).toFixed(2)
+          : 0
+      })).sort((a, b) => b.value - a.value)
+    })).sort((a, b) => b.currentValue - a.currentValue);
+
+    const categoryData = Object.entries(categoryByLocation).map(([category, stats]) => ({
+      category,
+      totalValue: stats.totalValue,
+      locationDistribution: Object.entries(stats.locations).map(([location, count]) => ({
+        location,
+        count,
+        percentage: locationTotals.totalAssets > 0 
+          ? (count / locationTotals.totalAssets * 100).toFixed(2)
+          : 0
+      })).sort((a, b) => b.count - a.count)
+    })).sort((a, b) => b.totalValue - a.totalValue);
+
+    res.json({
+      success: true,
+      data: {
+        locationData,
+        categoryData,
+        summary: {
+          totalAssets: locationTotals.totalAssets,
+          totalValue: locationTotals.totalValue,
+          uniqueLocations: Object.keys(locationStats).length,
+          uniqueCategories: Object.keys(categoryByLocation).length,
+          averageValuePerLocation: Object.keys(locationStats).length > 0 
+            ? (locationTotals.totalValue / Object.keys(locationStats).length).toFixed(2)
+            : 0,
+          averageAssetsPerLocation: Object.keys(locationStats).length > 0 
+            ? (locationTotals.totalAssets / Object.keys(locationStats).length).toFixed(1)
+            : 0
+        },
+        generatedAt: new Date()
+      },
+      message: "Real-time şöbə hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 📄 REPORT FUNCTIONS =====================
+
+// ✅ Excel hesabatı yarat
+export const createExcelReport = async (req, res) => {
+  try {
+    const { title, description, reportType, data, summary, filters } = req.body;
+
+    const report = await ExcelReport.create({
+      userId: req.user._id,
+      title,
+      description,
+      reportType,
+      fileName: `report_${Date.now()}.xlsx`,
+      data,
+      summary,
+      filters,
+      generatedAt: new Date()
+    });
+
+    res.status(201).json({
+      success: true,
+      data: report,
+      message: "Excel hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ PDF hesabatı yarat
+export const createPdfReport = async (req, res) => {
+  try {
+    const { title, description, reportType } = req.body;
+
+    const report = await PdfReport.create({
+      userId: req.user._id,
+      title,
+      description,
+      reportType,
+      fileName: `report_${Date.now()}.pdf`,
+      generatedAt: new Date()
+    });
+
+    res.status(201).json({
+      success: true,
+      data: report,
+      message: "PDF hesabatı uğurla yaradıldı"
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ===================== 💰 FINANCIAL FUNCTIONS =====================
+
+// ✅ Əməkhaqqı fondu yenilə
+// Ən sadə versiya
+export const updateSalaryFund = async (req, res) => {
+  try {
+    const { month, amount } = req.body;
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
+    }
+
+    // Ay validation
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    
+    const monthIndex = months.findIndex(m => 
+      m.toLowerCase() === month.toLowerCase()
+    );
+    
+    if (monthIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: "Yanlış ay adı. Doğru format: January, February, etc."
+      });
+    }
+
+    // Əgər field yoxdursa yarat
+    if (!user.monthly_total_salary_fund) {
+      user.monthly_total_salary_fund = {};
+    }
+
+    // Sadəcə maaş fondu yenilə
+    user.monthly_total_salary_fund[months[monthIndex]] = parseFloat(amount);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Maaş fondu yeniləndi",
+      data: {
+        month: months[monthIndex],
+        amount: user.monthly_total_salary_fund[months[monthIndex]],
+        updatedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
 // ✅ Şirkət vergilərini yenilə
+// ✅ Şirkət vergilərini yenilə (düzəldilmiş versiya)
 export const updateCompanyTaxes = async (req, res) => {
   try {
     const { month, dsmf, ish, its } = req.body;
+    const { id } = req.params;
 
-    const user = await User.findById(req.params.id);
+    // Validation
+    if (!month) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Ay adı tələb olunur" 
+      });
+    }
+
+    const user = await User.findById(id);
     if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
     }
 
-    if (!user.company_taxes.dsmf[month]) {
-      return res.status(400).json({ message: "Yanlış ay adı" });
+    // Ay validation
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    
+    const monthIndex = months.findIndex(m => 
+      m.toLowerCase() === month.toLowerCase()
+    );
+    
+    if (monthIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: "Yanlış ay adı. Doğru format: January, February, etc.",
+        availableMonths: months
+      });
     }
+
+    const normalizedMonth = months[monthIndex];
+
+    // Əgər company_taxes yoxdursa yarat
+    if (!user.company_taxes) {
+      user.company_taxes = {
+        dsmf: {},
+        ish: {},
+        its: {},
+        total_company_taxes: {}
+      };
+    }
+
+    // Əgər vergi field-ləri yoxdursa yarat
+    if (!user.company_taxes.dsmf) user.company_taxes.dsmf = {};
+    if (!user.company_taxes.ish) user.company_taxes.ish = {};
+    if (!user.company_taxes.its) user.company_taxes.its = {};
+    if (!user.company_taxes.total_company_taxes) user.company_taxes.total_company_taxes = {};
 
     // Vergiləri yenilə
-    user.company_taxes.dsmf[month] = dsmf || user.company_taxes.dsmf[month];
-    user.company_taxes.ish[month] = ish || user.company_taxes.ish[month];
-    user.company_taxes.its[month] = its || user.company_taxes.its[month];
+    if (dsmf !== undefined) {
+      user.company_taxes.dsmf[normalizedMonth] = parseFloat(dsmf);
+    }
+    
+    if (ish !== undefined) {
+      user.company_taxes.ish[normalizedMonth] = parseFloat(ish);
+    }
+    
+    if (its !== undefined) {
+      user.company_taxes.its[normalizedMonth] = parseFloat(its);
+    }
 
     // Ümumi vergi hesabla
-    user.company_taxes.total_company_taxes[month] =
-      user.company_taxes.dsmf[month] +
-      user.company_taxes.ish[month] +
-      user.company_taxes.its[month];
+    const totalDsmf = user.company_taxes.dsmf[normalizedMonth] || 0;
+    const totalIsh = user.company_taxes.ish[normalizedMonth] || 0;
+    const totalIts = user.company_taxes.its[normalizedMonth] || 0;
+    
+    user.company_taxes.total_company_taxes[normalizedMonth] = 
+      totalDsmf + totalIsh + totalIts;
 
     await user.save();
 
-    res.json(user.company_taxes);
+    res.json({
+      success: true,
+      data: {
+        month: normalizedMonth,
+        dsmf: user.company_taxes.dsmf[normalizedMonth] || 0,
+        ish: user.company_taxes.ish[normalizedMonth] || 0,
+        its: user.company_taxes.its[normalizedMonth] || 0,
+        total: user.company_taxes.total_company_taxes[normalizedMonth] || 0
+      },
+      message: "Şirkət vergiləri uğurla yeniləndi"
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Update company taxes error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
@@ -482,15 +2341,19 @@ export const updateCompanyTaxes = async (req, res) => {
 export const getEmployeeFlowData = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
-      "monthly_employee_flow employee_flow_history"
+      "monthly_employee_flow"
     );
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
+    const history = await EmployeeFlow.find({ userId: req.params.id })
+      .populate('employeeId', 'name email')
+      .sort({ date: -1 });
+
     res.json({
       monthly_stats: user.monthly_employee_flow,
-      history: user.employee_flow_history,
+      history: history
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -508,29 +2371,36 @@ export const updateEmployeeFlowData = async (req, res) => {
     }
 
     if (month && type) {
-      // Aylıq statistikaları yenilə
-      if (type === "new_hires") {
-        user.monthly_employee_flow[month].new_hires += count;
-        user.monthly_employee_flow[month].net_change += count;
-      } else if (type === "terminations") {
-        user.monthly_employee_flow[month].terminations += count;
-        user.monthly_employee_flow[month].net_change -= count;
-      } else if (type === "resignations") {
-        user.monthly_employee_flow[month].resignations += count;
-        user.monthly_employee_flow[month].net_change -= count;
+      if (user.monthly_employee_flow[month]) {
+        if (type === "new_hires") {
+          user.monthly_employee_flow[month].new_hires += count;
+          user.monthly_employee_flow[month].net_change += count;
+        } else if (type === "terminations") {
+          user.monthly_employee_flow[month].terminations += count;
+          user.monthly_employee_flow[month].net_change -= count;
+        } else if (type === "resignations") {
+          user.monthly_employee_flow[month].resignations += count;
+          user.monthly_employee_flow[month].net_change -= count;
+        }
       }
     }
 
     if (employeeData) {
-      // Tarixçəyə yeni qeyd əlavə et
-      user.employee_flow_history.push(employeeData);
+      await EmployeeFlow.create({
+        userId: req.params.id,
+        ...employeeData
+      });
     }
 
     await user.save();
 
+    const history = await EmployeeFlow.find({ userId: req.params.id })
+      .populate('employeeId', 'name email')
+      .sort({ date: -1 });
+
     res.json({
       monthly_stats: user.monthly_employee_flow,
-      history: user.employee_flow_history,
+      history: history
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -540,27 +2410,31 @@ export const updateEmployeeFlowData = async (req, res) => {
 // ✅ Ödəniş ümumi baxışını gətir
 export const getPaymentOverview = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select(
-      "employee_payments employer_payments current_month_total"
-    );
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
-    // Ödəniş statistikalarını hesabla
-    const totalEmployeePayments = user.employee_payments.reduce(
+    const employeePayments = await Payment.find({
+      userId: req.params.id,
+      paymentFor: "employee"
+    }).sort({ paymentDate: -1 });
+
+    const employerPayments = await Payment.find({
+      userId: req.params.id,
+      paymentFor: "employer"
+    }).sort({ paymentDate: -1 });
+
+    const totalEmployeePayments = employeePayments.reduce(
       (sum, payment) => sum + payment.amount,
       0
     );
-    const totalEmployerPayments = user.employer_payments.reduce(
+    const totalEmployerPayments = employerPayments.reduce(
       (sum, payment) => sum + payment.amount,
       0
     );
-    const completedPayments = user.employee_payments.filter(
+    const completedPayments = employeePayments.filter(
       (p) => p.status === "completed"
-    ).length;
-    const pendingPayments = user.employee_payments.filter(
-      (p) => p.status === "pending"
     ).length;
 
     res.json({
@@ -569,257 +2443,23 @@ export const getPaymentOverview = async (req, res) => {
         total_employer_payments: totalEmployerPayments,
         total_payments: totalEmployeePayments + totalEmployerPayments,
         completed_payments: completedPayments,
-        pending_payments: pendingPayments,
+        pending_payments: employeePayments.length - completedPayments,
         payment_success_rate:
-          user.employee_payments.length > 0
+          employeePayments.length > 0
             ? (
-                (completedPayments / user.employee_payments.length) *
+                (completedPayments / employeePayments.length) *
                 100
               ).toFixed(2)
             : 0,
       },
       current_month: user.current_month_total,
-      recent_employee_payments: user.employee_payments.slice(-5).reverse(),
-      recent_employer_payments: user.employer_payments.slice(-5).reverse(),
+      recent_employee_payments: employeePayments.slice(0, 5),
+      recent_employer_payments: employerPayments.slice(0, 5),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
-// ===================== 📅 MÖVCUD TƏQVİM FUNKSİYALARI =====================
-
-// ✅ Təqvim günü əlavə et
-export const addCalendarDay = async (req, res) => {
-  try {
-    const { date, dayOfWeek, status, events, note } = req.body;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    // Eyni tarixli gün varmı yoxla
-    const existingDay = user.calendar.find(
-      (day) =>
-        new Date(day.date).toDateString() === new Date(date).toDateString()
-    );
-
-    if (existingDay) {
-      return res
-        .status(400)
-        .json({ message: "Bu tarix üçün gün artıq mövcuddur" });
-    }
-
-    user.calendar.push({ date, dayOfWeek, status, events, note });
-    await user.save();
-
-    res.json(user.calendar);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const getAllCalendar = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    res.json(user.calendar);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const getCalendarDayById = async (req, res) => {
-  try {
-    const { id, dayId } = req.params;
-
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const calendarDay = user.calendar.id(dayId);
-    if (!calendarDay) {
-      return res.status(404).json({ message: "Calendar günü tapılmadı" });
-    }
-
-    res.json(calendarDay);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ Təqvim gününü yenilə
-export const updateCalendarDay = async (req, res) => {
-  try {
-    const { dayId } = req.params;
-    const updateData = req.body;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const dayIndex = user.calendar.id(dayId);
-    if (!dayIndex) {
-      return res.status(404).json({ message: "Gün tapılmadı" });
-    }
-
-    Object.assign(dayIndex, updateData);
-    await user.save();
-
-    res.json(user.calendar);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ Təqvim gününü sil
-export const deleteCalendarDay = async (req, res) => {
-  try {
-    const { dayId } = req.params;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    user.calendar.pull(dayId);
-    await user.save();
-
-    res.json({ message: "Gün silindi", calendar: user.calendar });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ===================== 🎯 MÖVCUD TƏDBİR FUNKSİYALARI =====================
-
-// ✅ Tədbir əlavə et
-export const addEvent = async (req, res) => {
-  try {
-    const { dayId } = req.params;
-    const { title, description, startTime, endTime, location } = req.body;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const day = user.calendar.id(dayId);
-    if (!day) {
-      return res.status(404).json({ message: "Gün tapılmadı" });
-    }
-
-    day.events.push({ title, description, startTime, endTime, location });
-    await user.save();
-
-    res.json(day.events);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ Tədbiri yenilə
-export const updateEvent = async (req, res) => {
-  try {
-    const { dayId, eventId } = req.params;
-    const updateData = req.body;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const day = user.calendar.id(dayId);
-    if (!day) {
-      return res.status(404).json({ message: "Gün tapılmadı" });
-    }
-
-    const event = day.events.id(eventId);
-    if (!event) {
-      return res.status(404).json({ message: "Tədbir tapılmadı" });
-    }
-
-    Object.assign(event, updateData);
-    await user.save();
-
-    res.json(day.events);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ Tədbiri sil
-export const deleteEvent = async (req, res) => {
-  try {
-    const { dayId, eventId } = req.params;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const day = user.calendar.id(dayId);
-    if (!day) {
-      return res.status(404).json({ message: "Gün tapılmadı" });
-    }
-
-    day.events.pull(eventId);
-    await user.save();
-
-    res.json({ message: "Tədbir silindi", events: day.events });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const getEventById = async (req, res) => {
-  try {
-    const { id, dayId, eventId } = req.params;
-
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const calendarDay = user.calendar.id(dayId);
-    if (!calendarDay) {
-      return res.status(404).json({ message: "Calendar günü tapılmadı" });
-    }
-
-    const event = calendarDay.events.id(eventId);
-    if (!event) {
-      return res.status(404).json({ message: "Event tapılmadı" });
-    }
-
-    res.json(event);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const getAllEvents = async (req, res) => {
-  try {
-    const { id, dayId, eventId } = req.params;
-
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const calendarDay = user.calendar.id(dayId);
-    if (!calendarDay) {
-      return res.status(404).json({ message: "Calendar günü tapılmadı" });
-    }
-
-    res.json(calendarDay.events);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ===================== 💰 MÖVCUD MALİYYƏ FUNKSİYALARI =====================
 
 // ✅ Maliyyə məlumatlarını yenilə
 export const updateFinancialData = async (req, res) => {
@@ -851,7 +2491,6 @@ export const updateMonthlyData = async (req, res) => {
       return res.status(404).json({ message: "İstifadəçi tapılmadı" });
     }
 
-    // Aylıq məlumatları yenilə
     if (user[dataType] && user[dataType][month] !== undefined) {
       user[dataType][month] = value;
       await user.save();
@@ -864,680 +2503,173 @@ export const updateMonthlyData = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-import AccountingService from "../services/accountingService.js";
 
-// ✅ MÜHASİBAT YAZILIŞI ƏLAVƏ ET
-export const addAccountingEntry = async (req, res) => {
-  try {
-    const { accountCode, amount, type, description, documentNumber, date } =
-      req.body;
+// ===================== 📈 HELPER FUNCTIONS =====================
 
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
+// User payment statistikalarını yenilə
+const updateUserPaymentStats = async (userId, payment) => {
+  const user = await User.findById(userId);
+  if (!user) return;
 
-    // Hesab məlumatlarını al
-    const accountInfo = AccountingService.getAccountInfo(accountCode);
-    if (!accountInfo) {
-      return res.status(400).json({ message: "Yanlış hesab kodu" });
-    }
-
-    // Validation
-    const validation = AccountingService.validateAccountingEntry({
-      accountCode,
-      amount,
-      type,
-      documentNumber,
-    });
-
-    if (!validation.isValid) {
-      return res.status(400).json({
-        message: "Validation xətası",
-        errors: validation.errors,
-      });
-    }
-
-    const newEntry = {
-      accountCode,
-      accountName: accountInfo.name,
-      amount,
-      type,
-      description,
-      documentNumber,
-      date: date || new Date(),
-      status: "posted",
-    };
-
-    user.accountingEntries.push(newEntry);
-
-    // Aylıq statistikaları yenilə
-    user.updateMonthlyAccounting(newEntry);
-
-    await user.save();
-
-    res.status(201).json({
-      success: true,
-      data: newEntry,
-      message: "Mühasibat yazılışı uğurla əlavə edildi",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  const month = new Date(payment.forMonth).toLocaleString('en-US', { month: 'long' });
+  
+  if (payment.paymentFor === "employee") {
+    if (!user.employee_payments) user.employee_payments = [];
   }
+  
+  await user.save();
 };
 
-// ✅ BÜTÜN MÜHASİBAT YAZILIŞLARINI GƏTİR
-export const getAccountingEntries = async (req, res) => {
-  try {
-    const { startDate, endDate, accountCode, type } = req.query;
+// User employee flow statistikalarını yenilə
+const updateUserEmployeeFlowStats = async (userId, flow) => {
+  const user = await User.findById(userId);
+  if (!user) return;
 
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
+  const month = new Date(flow.date).toLocaleString('en-US', { month: 'long' });
+  
+  if (user.monthly_employee_flow && user.monthly_employee_flow[month]) {
+    if (flow.type === "hired") {
+      user.monthly_employee_flow[month].new_hires += 1;
+      user.monthly_employee_flow[month].net_change += 1;
+    } else if (flow.type === "terminated" || flow.type === "resigned") {
+      const field = flow.type === "terminated" ? "terminations" : "resignations";
+      user.monthly_employee_flow[month][field] += 1;
+      user.monthly_employee_flow[month].net_change -= 1;
     }
-
-    let entries = user.accountingEntries;
-
-    // Filterləmə
-    if (startDate) {
-      entries = entries.filter(
-        (entry) => new Date(entry.date) >= new Date(startDate)
-      );
-    }
-    if (endDate) {
-      entries = entries.filter(
-        (entry) => new Date(entry.date) <= new Date(endDate)
-      );
-    }
-    if (accountCode) {
-      entries = entries.filter((entry) => entry.accountCode === accountCode);
-    }
-    if (type) {
-      entries = entries.filter((entry) => entry.type === type);
-    }
-
-    // Sıralama (ən yeni üstə)
-    entries.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    res.json({
-      success: true,
-      data: entries,
-      count: entries.length,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
+  
+  await user.save();
 };
 
-// ✅ MÜHASİBAT BALANSLARINI GƏTİR
-export const getAccountingBalances = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
+// User accounting statistikalarını yenilə
+const updateUserAccountingStats = async (userId, entry) => {
+  const user = await User.findById(userId);
+  if (!user) return;
 
-    // Balansları yenilə
-    user.updateAccountingBalances();
-    await user.save();
-
-    const balances = AccountingService.calculateAllBalances(
-      user.accountingEntries
-    );
-
-    res.json({
-      success: true,
-      data: {
-        balances: balances.balances,
-        summary: balances.summary,
-        lastUpdated: new Date(),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ HESAB KODU ÜZRƏ BALANS GƏTİR
-export const getAccountBalance = async (req, res) => {
-  try {
-    const { accountCode } = req.params;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const accountInfo = AccountingService.getAccountInfo(accountCode);
-    if (!accountInfo) {
-      return res.status(404).json({ message: "Hesab kodu tapılmadı" });
-    }
-
-    const balance = AccountingService.calculateAccountBalance(
-      user.accountingEntries,
-      accountCode
-    );
-
-    res.json({
-      success: true,
-      data: balance,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ MÜHASİBAT HESABATI YARAT
-export const generateAccountingReport = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const report = AccountingService.generateAccountingReport(
-      user.accountingEntries,
-      startDate,
-      endDate
-    );
-
-    res.json({
-      success: true,
-      data: report,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ NÜMUNƏ MÜHASİBAT ƏMƏLİYYATI YARAT
-export const createSampleAccountingTransaction = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const sampleEntries = AccountingService.createSampleTransaction();
-
-    sampleEntries.forEach((entry) => {
-      user.accountingEntries.push(entry);
-      user.updateMonthlyAccounting(entry);
-    });
-
-    await user.save();
-
-    res.status(201).json({
-      success: true,
-      data: sampleEntries,
-      message: "Nümunə mühasibat əməliyyatı uğurla yaradıldı",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ MÜHASİBAT YAZILIŞINI SİL
-export const deleteAccountingEntry = async (req, res) => {
-  try {
-    const { entryId } = req.params;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const entryIndex = user.accountingEntries.findIndex(
-      (entry) => entry._id.toString() === entryId
-    );
-    if (entryIndex === -1) {
-      return res.status(404).json({ message: "Yazılış tapılmadı" });
-    }
-
-    user.accountingEntries.splice(entryIndex, 1);
-    await user.save();
-
-    res.json({
-      success: true,
-      message: "Mühasibat yazılışı uğurla silindi",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ MÜHASİBAT YAZILIŞINI YENİLƏ
-export const updateAccountingEntry = async (req, res) => {
-  try {
-    const { entryId } = req.params;
-    const updateData = req.body;
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: "İstifadəçi tapılmadı" });
-    }
-
-    const entry = user.accountingEntries.id(entryId);
-    if (!entry) {
-      return res.status(404).json({ message: "Yazılış tapılmadı" });
-    }
-
-    Object.assign(entry, updateData);
-    await user.save();
-
-    res.json({
-      success: true,
-      data: entry,
-      message: "Mühasibat yazılışı uğurla yeniləndi",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-// controllers/companyFileController.js
-import multer from "multer";
-import CompanyFile from "../models/companyFileModel.js";
-
-// Multer konfiqurasiyası
-const storage = multer.memoryStorage();
-export const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedMimeTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "image/jpeg",
-      "image/png",
-      "image/jpg",
-      "image/gif",
-      "text/plain",
-      "application/zip",
-      "application/x-rar-compressed",
-    ];
-
-    if (allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
+  const month = new Date(entry.date).toLocaleString("en-US", { month: "long" });
+  
+  if (user.monthlyAccounting && user.monthlyAccounting[month]) {
+    user.monthlyAccounting[month].totalTransactions += 1;
+    user.monthlyAccounting[month].totalAmount += entry.amount;
+    
+    if (entry.type === "debit") {
+      user.monthlyAccounting[month].debitTotal += entry.amount;
     } else {
-      cb(new Error("Destəklənməyən fayl formatı"), false);
+      user.monthlyAccounting[month].creditTotal += entry.amount;
     }
-  },
-});
-
-// ✅ ŞİRKƏT ÜÇÜN FAYL YÜKLƏMƏ - DÜZƏLİŞ EDİLMİŞ VERSİYA
-export const uploadCompanyFile = async (req, res) => {
-  try {
-    const { companyId } = req.params;
-    const { title, description, category, visibleTo, departments, tags } =
-      req.body;
-
-    // uploadedBy-i düzəldirik
-    let uploadedBy = "system";
-    if (req.user && req.user.id) {
-      uploadedBy = req.user.id;
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Fayl seçilməyib",
-      });
-    }
-
-    // Category və visibleTo dəyərlərini validate edirik
-    const validCategories = [
-      "document",
-      "policy",
-      "report",
-      "training",
-      "template",
-      "other",
-    ];
-    const validVisibleTo = ["all", "departments", "managers"];
-
-    const finalCategory = validCategories.includes(category)
-      ? category
-      : "document";
-    const finalVisibleTo = validVisibleTo.includes(visibleTo)
-      ? visibleTo
-      : "all";
-
-    // Yeni fayl yaradırıq
-    const companyFile = new CompanyFile({
-      companyId,
-      title: title || req.file.originalname,
-      description: description || "",
-      category: finalCategory,
-
-      filename: req.file.originalname,
-      originalName: req.file.originalname,
-      contentType: req.file.mimetype,
-      data: req.file.buffer,
-      fileSize: req.file.size,
-
-      uploadedBy,
-      visibleTo: finalVisibleTo,
-      departments: departments
-        ? Array.isArray(departments)
-          ? departments
-          : [departments]
-        : [],
-      tags: tags
-        ? Array.isArray(tags)
-          ? tags
-          : tags.split(",").map((tag) => tag.trim())
-        : [],
-    });
-
-    await companyFile.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Fayl şirkət üçün uğurla yükləndi",
-      data: {
-        fileId: companyFile._id,
-        title: companyFile.title,
-        filename: companyFile.filename,
-        originalName: companyFile.originalName,
-        contentType: companyFile.contentType,
-        fileSize: companyFile.fileSize,
-        category: companyFile.category,
-        visibleTo: companyFile.visibleTo,
-        uploadedAt: companyFile.createdAt,
-        downloadUrl: `/api/company/${companyId}/files/${companyFile._id}/download`,
-        previewUrl: `/api/company/${companyId}/files/${companyFile._id}/view`,
-      },
-    });
-  } catch (error) {
-    console.error("Upload xətası:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
   }
+  
+  await user.save();
 };
 
-// ✅ ŞİRKƏTİN BÜTÜN FAYLLARINI LİST ETMƏK (DÜZƏLİŞ EDİLMİŞ)
-export const getCompanyFiles = async (req, res) => {
-  try {
-    const { companyId } = req.params;
-    const { category, search, page = 1, limit = 20 } = req.query;
+// User asset statistikalarını yenilə
+const updateUserAssetStats = async (userId) => {
+  const assets = await Asset.find({ userId, status: "Aktiv" });
+  
+  const user = await User.findById(userId);
+  if (!user) return;
 
-    const employeeId = req.user?.id;
-    const employeeDepartment = req.user?.department;
+  user.assetStatistics = {
+    totalAssets: assets.length,
+    totalInitialValue: assets.reduce((sum, a) => sum + a.initialValue, 0),
+    totalCurrentValue: assets.reduce((sum, a) => sum + a.currentValue, 0),
+    totalAmortization: assets.reduce((sum, a) => sum + a.amortization, 0),
+    activeAssets: assets.length,
+    lastUpdated: new Date()
+  };
 
-    // Filter yaradırıq
-    let filter = {
-      companyId,
-      isActive: true,
-    };
-
-    if (
-      category &&
-      [
-        "document",
-        "policy",
-        "report",
-        "training",
-        "template",
-        "other",
-      ].includes(category)
-    ) {
-      filter.category = category;
-    }
-
-    if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { tags: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    // Pagination
-    const skip = (page - 1) * limit;
-
-    // Bütün faylları getir
-    const files = await CompanyFile.find(filter)
-      .select("-data") // Fayl datalarını çıxarırıq (performans)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    // İşçinin görə biləcəyi faylları filter et
-    const accessibleFiles = files.filter((file) => {
-      if (file.visibleTo === "all") return true;
-      if (file.visibleTo === "managers") {
-        // Manager yoxlaması
-        return req.user?.role === "manager" || req.user?.role === "admin";
-      }
-      if (file.visibleTo === "departments") {
-        return file.departments.includes(employeeDepartment);
-      }
-      return false;
-    });
-
-    // Total say
-    const total = await CompanyFile.countDocuments(filter);
-
-    res.json({
-      success: true,
-      data: accessibleFiles.map((file) => ({
-        _id: file._id,
-        title: file.title,
-        description: file.description,
-        category: file.category,
-        filename: file.filename,
-        originalName: file.originalName,
-        contentType: file.contentType,
-        fileSize: file.fileSize,
-        uploadedBy: file.uploadedBy,
-        visibleTo: file.visibleTo,
-        departments: file.departments,
-        downloadCount: file.downloadCount,
-        createdAt: file.createdAt,
-        downloadUrl: `/api/company/${companyId}/files/${file._id}/download`,
-        previewUrl: `/api/company/${companyId}/files/${file._id}/view`,
-      })),
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+  if (user.assetStatistics.totalInitialValue > 0) {
+    user.assetStatistics.averageAmortizationPercentage =
+      (user.assetStatistics.totalAmortization /
+        user.assetStatistics.totalInitialValue) *
+      100;
   }
+
+  await user.save();
 };
 
-// ✅ ŞİRKƏT FAYLINI DOWNLOAD ETMƏK (DÜZƏLİŞ EDİLMİŞ)
-export const downloadCompanyFile = async (req, res) => {
-  try {
-    const { companyId, fileId } = req.params;
-
-    // Faylı tap
-    const file = await CompanyFile.findOne({
-      _id: fileId,
-      companyId,
-      isActive: true,
-    });
-
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "Fayl tapılmadı",
-      });
-    }
-
-    // İşçinin bu faylı görə biləcəyini yoxla
-    const hasAccess = checkFileAccess(file, req.user);
-    if (!hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: "Bu fayla giriş icazəniz yoxdur",
-      });
-    }
-
-    // Download sayını artır
-    file.downloadCount += 1;
-    file.lastDownloaded = new Date();
-    await file.save();
-
-    // Response header-larını təyin et
-    const filename = encodeURIComponent(file.originalName || file.filename);
-
-    res.set({
-      "Content-Type": file.contentType,
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": file.fileSize,
-    });
-
-    // Buffer məlumatını göndər
-    res.send(file.data);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// ✅ FAYL ACCESS YOXLAMA FUNKSİYASI (DÜZƏLİŞ EDİLMİŞ)
-// BU FUNKSİYANIN İÇİNİ DƏYİŞDİRƏK:
-const checkFileAccess = (file, user) => {
-  // Əgər user yoxdursa, default olaraq true qaytar (test üçün)
-  if (!user) {
-    return true; // TEST ÜÇÜN TRUE QAYTARIRIQ
-  }
-
-  // Admin hər şeyə baxa bilər
-  if (user.role === "admin" || user.role === "company_admin") {
-    return true;
-  }
-
-  // Normal işçilər üçün access qaydaları
-  switch (file.visibleTo) {
-    case "all":
-      return true;
-
-    case "managers":
-      return user.role === "manager" || user.role === "supervisor";
-
-    case "departments":
-      return (
-        file.departments.includes(user.department) ||
-        file.departments.length === 0
-      );
-
-    default:
-      return false;
-  }
-};
-
-// ✅ ŞİRKƏT FAYLINI SİLMƏK
-export const deleteCompanyFile = async (req, res) => {
-  try {
-    const { companyId, fileId } = req.params;
-
-    // Soft delete - isActive false edirik
-    const file = await CompanyFile.findOneAndUpdate(
-      {
-        _id: fileId,
-        companyId,
-      },
-      {
-        isActive: false,
-      },
-      { new: true }
-    );
-
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "Fayl tapılmadı",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Fayl uğurla silindi",
-      data: {
-        fileId: file._id,
-        title: file.title,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// ✅ ŞİRKƏT FAYLINI PREVIEW ETMƏK
-export const viewCompanyFile = async (req, res) => {
-  try {
-    const { companyId, fileId } = req.params;
-
-    const file = await CompanyFile.findOne({
-      _id: fileId,
-      companyId,
-      isActive: true,
-    });
-
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "Fayl tapılmadı",
-      });
-    }
-
-    // Access yoxlaması
-    const hasAccess = checkFileAccess(file, req.user);
-    if (!hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: "Bu fayla giriş icazəniz yoxdur",
-      });
-    }
-
-    // Content-Type'ı təyin et
-    res.set("Content-Type", file.contentType);
-
-    // PDF və şəkillər üçün preview, digərləri üçün download
-    if (
-      file.contentType.startsWith("image/") ||
-      file.contentType === "application/pdf"
-    ) {
-      res.set(
-        "Content-Disposition",
-        `inline; filename="${encodeURIComponent(file.originalName)}"`
-      );
-    } else {
-      res.set(
-        "Content-Disposition",
-        `attachment; filename="${encodeURIComponent(file.originalName)}"`
-      );
-    }
-
-    res.send(file.data);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
+// Export all functions
+export default {
+  // Auth functions
+  registerUser,
+  verifyOtp,
+  resendOtp,
+  loginUser,
+  getProfile,
+  forgotPassword,
+  refreshAccessToken,
+  resetPassword,
+  getAllUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+  
+  // Event functions
+  addEvent,
+  getEvents,
+  updateEvent,
+  deleteEvent,
+  
+  // Payment functions
+  addPayment,
+  getPayments,
+  updatePayment,
+  updatePaymentStatus,
+  deletePayment,
+  
+  // Employee flow functions
+  addEmployeeFlow,
+  getEmployeeFlows,
+  
+  // Accounting functions
+  addAccountingEntry,
+  getAccountingEntries,
+  deleteAccountingEntry,
+  
+  // AssetCategory functions
+  addAssetCategory,
+  getAssetCategories,
+  updateAssetCategory,
+  deleteAssetCategory,
+  getAssetsByCategory,
+  
+  // Asset functions
+  addAsset,
+  getAssets,
+  updateAsset,
+  getAssetStatistics,
+  searchAssets,
+  
+  // CategoryReport functions
+  createCategoryReport,
+  getCategoryReports,
+  getCategoryReportById,
+  deleteCategoryReport,
+  generateRealTimeCategoryReport,
+  
+  // DepartmentReport functions
+  createDepartmentReport,
+  getDepartmentReports,
+  getDepartmentReportById,
+  deleteDepartmentReport,
+  generateRealTimeDepartmentReport,
+  
+  // Report functions
+  createExcelReport,
+  createPdfReport,
+  
+  // Financial functions
+  updateSalaryFund,
+  updateCompanyTaxes,
+  getEmployeeFlowData,
+  updateEmployeeFlowData,
+  getPaymentOverview,
+  updateFinancialData,
+  updateMonthlyData,
+  
+  // Helper functions
+  updateUserPaymentStats,
+  updateUserEmployeeFlowStats,
+  updateUserAccountingStats,
+  updateUserAssetStats
 };

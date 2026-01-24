@@ -29,6 +29,8 @@ import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 import { fileURLToPath } from "url";
 import chatbotRoute from "./routes/chatbotRoute.js";
+import dashboardRoutess from "./routes/hrdashboardRoute.js";
+import statRoute from "./routes/statsRoute.js";
 
 dotenv.config();
 
@@ -77,7 +79,6 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // --- Routes ---
-// PUBLIC route üçün rate limiter tətbiq edirik
 app.use("/api/users/register", authLimiter);
 app.use("/api/users", userRoutes);
 app.use("/api/employees", employeeRoutes);
@@ -101,6 +102,8 @@ app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
 app.use("/api/chatbot", chatbotRoute);
 app.use("/api/payments", paymentsRoute);
+app.use("/api/dashboards", dashboardRoutess);
+app.use("/api/stats", statRoute);
 
 connectDB();
 // --- Server ---
