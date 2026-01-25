@@ -809,7 +809,304 @@ export const deletePayment = async (req, res) => {
     });
   }
 };
+// ✅ Şirkət ümumi vergilərini hesabla (AVTOMATİK)
+export const calculateCompanyTaxes = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month } = req.body;
 
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
+    }
+
+    // Maaş fondu
+    const salaryFund = user.monthly_total_salary_fund?.[month] || 0;
+    
+    // Vergiləri AVTOMATİK hesabla
+    const taxResult = taxCalculationService.calculateEmployerTaxes(salaryFund);
+    
+    // Vergiləri avtomatik yenilə
+    if (!user.company_taxes) {
+      user.company_taxes = { dsmf: {}, ish: {}, its: {}, total_company_taxes: {} };
+    }
+    
+    user.company_taxes.dsmf[month] = taxResult.employerTaxes.dsmf;
+    user.company_taxes.ish[month] = taxResult.employerTaxes.ish;
+    user.company_taxes.its[month] = taxResult.employerTaxes.its;
+    user.company_taxes.total_company_taxes[month] = taxResult.totalEmployerTaxes;
+    
+    await user.save();
+
+    // Ümumi xərclər
+    const totalCost = salaryFund + taxResult.totalEmployerTaxes;
+
+    res.json({
+      success: true,
+      data: {
+        month,
+        salary_fund: salaryFund,
+        company_taxes: {
+          dsmf: taxResult.employerTaxes.dsmf,
+          ish: taxResult.employerTaxes.ish,
+          its: taxResult.employerTaxes.its,
+          total: taxResult.totalEmployerTaxes
+        },
+        total_cost_for_company: totalCost,
+        breakdown: {
+          salary_percentage: (salaryFund / totalCost * 100).toFixed(2),
+          tax_percentage: (taxResult.totalEmployerTaxes / totalCost * 100).toFixed(2)
+        }
+      },
+      message: 'Şirkət vergiləri AVTOMATİK hesablandı'
+    });
+
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// ✅ Bütün işçilərdən şirkət vergilərini hesabla
+export const calculateCompanyTaxesFromEmployees = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month } = req.body;
+
+    // 1. Şirkətin bütün işçilərini gətir
+    const employees = await Employee.find({ companyId: id, status: 'active' });
+    
+    if (employees.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Bu şirkətə aid işçi tapılmadı"
+      });
+    }
+
+    // 2. Ümumi maaş fondu hesabla
+    let totalSalaryFund = 0;
+    let totalCompanyTaxes = 0;
+    let employeeBreakdown = [];
+
+    employees.forEach(employee => {
+      const employeeSalary = employee.gross || 0;
+      totalSalaryFund += employeeSalary;
+      
+      // Hər bir işçi üçün işəgötürən vergiləri
+      const employeeType = employee.employeeType || 'private';
+      let employerTaxResult;
+      
+      if (employeeType === 'state') {
+        employerTaxResult = taxCalculationService.calculateStateEmployerTaxes(employeeSalary);
+      } else {
+        employerTaxResult = taxCalculationService.calculatePrivateEmployerTaxes(employeeSalary);
+      }
+      
+      totalCompanyTaxes += employerTaxResult.totalEmployerTaxes;
+      
+      employeeBreakdown.push({
+        employeeId: employee._id,
+        name: `${employee.firstName} ${employee.lastName}`,
+        gross: employeeSalary,
+        employeeType: employeeType,
+        employer_taxes: employerTaxResult.employerTaxes,
+        total_employer_taxes: employerTaxResult.totalEmployerTaxes,
+        total_cost: employerTaxResult.totalLaborCost
+      });
+    });
+
+    // 3. User-də məlumatları yenilə
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
+    }
+
+    // Maaş fondu yenilə
+    if (!user.monthly_total_salary_fund) {
+      user.monthly_total_salary_fund = {};
+    }
+    user.monthly_total_salary_fund[month] = totalSalaryFund;
+    
+    // Vergiləri yenilə
+    if (!user.company_taxes) {
+      user.company_taxes = { dsmf: {}, ish: {}, its: {}, total_company_taxes: {} };
+    }
+    
+    // Ümumi vergiləri hesabla
+    const overallTaxResult = taxCalculationService.calculateEmployerTaxes(totalSalaryFund);
+    
+    user.company_taxes.dsmf[month] = overallTaxResult.employerTaxes.dsmf;
+    user.company_taxes.ish[month] = overallTaxResult.employerTaxes.ish;
+    user.company_taxes.its[month] = overallTaxResult.employerTaxes.its;
+    user.company_taxes.total_company_taxes[month] = overallTaxResult.totalEmployerTaxes;
+    
+    // Cari ay statistikaları
+    user.current_month_total = {
+      salary_fund: totalSalaryFund,
+      company_taxes: overallTaxResult.totalEmployerTaxes,
+      employee_count: employees.length,
+      total_cost: totalSalaryFund + overallTaxResult.totalEmployerTaxes
+    };
+    
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        month,
+        summary: {
+          total_employees: employees.length,
+          total_salary_fund: totalSalaryFund,
+          total_company_taxes: overallTaxResult.totalEmployerTaxes,
+          total_company_cost: totalSalaryFund + overallTaxResult.totalEmployerTaxes,
+          average_salary_per_employee: employees.length > 0 
+            ? (totalSalaryFund / employees.length).toFixed(2) 
+            : 0,
+          average_tax_per_employee: employees.length > 0 
+            ? (overallTaxResult.totalEmployerTaxes / employees.length).toFixed(2) 
+            : 0
+        },
+        tax_breakdown: {
+          dsmf: overallTaxResult.employerTaxes.dsmf,
+          ish: overallTaxResult.employerTaxes.ish,
+          its: overallTaxResult.employerTaxes.its,
+          total: overallTaxResult.totalEmployerTaxes
+        },
+        employee_breakdown: employeeBreakdown,
+        cost_distribution: {
+          salary_percentage: totalSalaryFund > 0 
+            ? (totalSalaryFund / (totalSalaryFund + overallTaxResult.totalEmployerTaxes) * 100).toFixed(2)
+            : 0,
+          tax_percentage: overallTaxResult.totalEmployerTaxes > 0 
+            ? (overallTaxResult.totalEmployerTaxes / (totalSalaryFund + overallTaxResult.totalEmployerTaxes) * 100).toFixed(2)
+            : 0
+        }
+      },
+      message: `Şirkət vergiləri ${employees.length} işçi əsasında hesablandı`
+    });
+
+  } catch (error) {
+    console.error('Calculate company taxes from employees error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// ✅ Müəssisə vergi statistikaları
+export const getCompanyTaxStatistics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { year } = req.query;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "İstifadəçi tapılmadı" 
+      });
+    }
+
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const statistics = months.map(month => {
+      const salaryFund = user.monthly_total_salary_fund?.[month] || 0;
+      const dsmf = user.company_taxes?.dsmf?.[month] || 0;
+      const ish = user.company_taxes?.ish?.[month] || 0;
+      const its = user.company_taxes?.its?.[month] || 0;
+      const totalTaxes = user.company_taxes?.total_company_taxes?.[month] || 0;
+      const totalCost = salaryFund + totalTaxes;
+
+      return {
+        month,
+        salary_fund: salaryFund,
+        company_taxes: {
+          dsmf,
+          ish,
+          its,
+          total: totalTaxes
+        },
+        total_cost: totalCost,
+        percentages: {
+          salary: salaryFund > 0 ? (salaryFund / totalCost * 100).toFixed(2) : 0,
+          dsmf: salaryFund > 0 ? (dsmf / salaryFund * 100).toFixed(2) : 0,
+          ish: salaryFund > 0 ? (ish / salaryFund * 100).toFixed(2) : 0,
+          its: salaryFund > 0 ? (its / salaryFund * 100).toFixed(2) : 0,
+          total_tax: salaryFund > 0 ? (totalTaxes / salaryFund * 100).toFixed(2) : 0
+        }
+      };
+    });
+
+    // İllik cəmlər
+    const yearlySummary = statistics.reduce((acc, monthStat) => {
+      acc.total_salary_fund += monthStat.salary_fund;
+      acc.total_dsmf += monthStat.company_taxes.dsmf;
+      acc.total_ish += monthStat.company_taxes.ish;
+      acc.total_its += monthStat.company_taxes.its;
+      acc.total_taxes += monthStat.company_taxes.total;
+      acc.total_cost += monthStat.total_cost;
+      return acc;
+    }, {
+      total_salary_fund: 0,
+      total_dsmf: 0,
+      total_ish: 0,
+      total_its: 0,
+      total_taxes: 0,
+      total_cost: 0
+    });
+
+    // Ortalama faizlər
+    yearlySummary.averages = {
+      dsmf_percentage: yearlySummary.total_salary_fund > 0 
+        ? (yearlySummary.total_dsmf / yearlySummary.total_salary_fund * 100).toFixed(2)
+        : 0,
+      ish_percentage: yearlySummary.total_salary_fund > 0 
+        ? (yearlySummary.total_ish / yearlySummary.total_salary_fund * 100).toFixed(2)
+        : 0,
+      its_percentage: yearlySummary.total_salary_fund > 0 
+        ? (yearlySummary.total_its / yearlySummary.total_salary_fund * 100).toFixed(2)
+        : 0,
+      total_tax_percentage: yearlySummary.total_salary_fund > 0 
+        ? (yearlySummary.total_taxes / yearlySummary.total_salary_fund * 100).toFixed(2)
+        : 0,
+      salary_cost_percentage: yearlySummary.total_cost > 0 
+        ? (yearlySummary.total_salary_fund / yearlySummary.total_cost * 100).toFixed(2)
+        : 0
+    };
+
+    res.json({
+      success: true,
+      data: {
+        statistics,
+        yearly_summary: yearlySummary,
+        company_info: {
+          name: user.companyName,
+          employee_count: user.total_employee_count || 0,
+          current_month_total: user.current_month_total || {}
+        }
+      },
+      message: 'Müəssisə vergi statistikaları'
+    });
+
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
 // ===================== 👥 EMPLOYEE FLOW FUNCTIONS =====================
 
 // ✅ İşçi axını qeydi əlavə et

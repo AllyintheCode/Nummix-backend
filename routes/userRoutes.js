@@ -75,7 +75,11 @@ import {
   getPaymentOverview,
   updateFinancialData,
   updateMonthlyData,
-  
+  calculateCompanyTaxes,
+  calculateCompanyTaxesFromEmployees,
+  getCompanyTaxStatistics,
+
+
   // Auth function
   refreshAccessToken,
 } from "../controllers/userController.js";
@@ -523,6 +527,7 @@ router.get("/profile", protect, getProfile);
  *         required: true
  *         schema:
  *           type: string
+ *         description: İstifadəçi ID-si
  *     responses:
  *       200:
  *         description: İstifadəçi uğurla silindi
@@ -531,7 +536,9 @@ router.get("/profile", protect, getProfile);
  *       500:
  *         description: Daxili server xətası
  */
-
+router.get("/:id", protect, getUserById);
+router.put("/:id", protect, updateUser);
+router.delete("/:id", protect, deleteUser);
 
 // ===================== 📅 EVENT ROUTES =====================
 
@@ -691,6 +698,115 @@ router.get("/events", protect, getEvents);
 router.put("/events/:eventId", protect, updateEvent);
 router.delete("/events/:eventId", protect, deleteEvent);
 
+// ===================== 🏢 MÜƏSSİSƏ VERGİ ROUTES =====================
+
+/**
+ * @swagger
+ * /api/users/{id}/calculate-company-taxes:
+ *   post:
+ *     summary: Şirkət vergilərini avtomatik hesabla
+ *     tags: [Financial]
+ *     description: Maaş fondu əsasında şirkət vergilərini avtomatik hesablayır
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: İstifadəçi (şirkət) ID-si
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - month
+ *             properties:
+ *               month:
+ *                 type: string
+ *                 example: "January"
+ *     responses:
+ *       200:
+ *         description: Şirkət vergiləri uğurla hesablandı
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post("/:id/calculate-company-taxes", protect, calculateCompanyTaxes);
+
+/**
+ * @swagger
+ * /api/users/{id}/calculate-taxes-from-employees:
+ *   post:
+ *     summary: İşçilərdən şirkət vergilərini hesabla
+ *     tags: [Financial]
+ *     description: Bütün işçilərin maaşları əsasında şirkət vergilərini hesablayır
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: İstifadəçi (şirkət) ID-si
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - month
+ *             properties:
+ *               month:
+ *                 type: string
+ *                 example: "January"
+ *     responses:
+ *       200:
+ *         description: İşçilərdən vergilər uğurla hesablandı
+ *       404:
+ *         description: İşçi tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.post("/:id/calculate-taxes-from-employees", protect, calculateCompanyTaxesFromEmployees);
+
+/**
+ * @swagger
+ * /api/users/{id}/tax-statistics:
+ *   get:
+ *     summary: Müəssisə vergi statistikaları
+ *     tags: [Financial]
+ *     description: Müəssisənin illik vergi statistikalarını gətirir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: İstifadəçi (şirkət) ID-si
+ *       - name: year
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: İl (məs: 2024)
+ *     responses:
+ *       200:
+ *         description: Vergi statistikaları uğurla gətirildi
+ *       404:
+ *         description: İstifadəçi tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
+router.get("/:id/tax-statistics", protect, getCompanyTaxStatistics);
+
 // ===================== 💰 PAYMENT ROUTES =====================
 
 /**
@@ -781,7 +897,121 @@ router.delete("/events/:eventId", protect, deleteEvent);
  */
 router.post("/payments", protect, addPayment);
 router.get("/payments", protect, getPayments);
+
+/**
+ * @swagger
+ * /api/users/payments/{paymentId}/status:
+ *   put:
+ *     summary: Ödəniş statusunu yenilə
+ *     tags: [Payments]
+ *     description: Müəyyən edilmiş ödənişin statusunu yeniləyir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: paymentId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Ödəniş ID-si
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [planned, pending, overdue, completed]
+ *                 example: "completed"
+ *     responses:
+ *       200:
+ *         description: Ödəniş statusu uğurla yeniləndi
+ *       400:
+ *         description: Yanlış status dəyəri
+ *       404:
+ *         description: Ödəniş tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
 router.put("/payments/:paymentId/status", protect, updatePaymentStatus);
+
+/**
+ * @swagger
+ * /api/users/payments/{paymentId}:
+ *   put:
+ *     summary: Ödəniş məlumatlarını yenilə
+ *     tags: [Payments]
+ *     description: Müəyyən edilmiş ödənişin məlumatlarını yeniləyir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: paymentId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Ödəniş ID-si
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               supplierName:
+ *                 type: string
+ *                 example: "Example Supplier"
+ *               category:
+ *                 type: string
+ *                 example: "Əməkhaqqı"
+ *               dueDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-01-20"
+ *               amount:
+ *                 type: number
+ *                 example: 1500
+ *               currency:
+ *                 type: string
+ *                 enum: [AZN, USD, RUB, EUR]
+ *                 example: "AZN"
+ *               status:
+ *                 type: string
+ *                 enum: [planned, pending, overdue, completed]
+ *                 example: "pending"
+ *     responses:
+ *       200:
+ *         description: Ödəniş məlumatları uğurla yeniləndi
+ *       404:
+ *         description: Ödəniş tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ *   
+ *   delete:
+ *     summary: Ödənişi sil
+ *     tags: [Payments]
+ *     description: Müəyyən edilmiş ödənişi silir
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: paymentId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Ödəniş ID-si
+ *     responses:
+ *       200:
+ *         description: Ödəniş uğurla silindi
+ *       404:
+ *         description: Ödəniş tapılmadı
+ *       500:
+ *         description: Daxili server xətası
+ */
 router.put("/payments/:paymentId", protect, updatePayment);
 router.delete("/payments/:paymentId", protect, deletePayment);
 
@@ -1796,9 +2026,6 @@ router.post("/pdf-reports", protect, createPdfReport);
  *       500:
  *         description: Daxili server xətası
  */
-router.get("/:id", protect, getUserById);
-router.put("/:id", updateUser);
-router.delete("/:id", protect, deleteUser);
 router.put("/:id/salary-fund", protect, updateSalaryFund);
 
 /**
