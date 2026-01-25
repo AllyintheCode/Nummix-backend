@@ -29,7 +29,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 import { fileURLToPath } from "url";
 import chatbotRoute from "./routes/chatbotRoute.js";
-import dashboardRoutess from "./routes/hrdashboardRoute.js";
+import dashboardRoutess from "./routes/hrDashboardRoute.js";
 import statRoute from "./routes/statsRoute.js";
 
 dotenv.config();

@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express";
 import {
   getDashboardData,
   getWeeklyAttendance,
@@ -10,8 +10,8 @@ import {
   getPaymentAnalytics,
   getEmployeeFlowStats,
   getUserStatistics,
-  testDashboard
-} from '../controllers/DashboardController.js';
+  testDashboard,
+} from "../controllers/DashboardController.js";
 import protect from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
@@ -71,7 +71,7 @@ const router = express.Router();
  *       500:
  *         description: Server xətası
  */
-router.get('/', protect, getDashboardData);
+router.get("/", protect, getDashboardData);
 
 /**
  * @swagger
@@ -116,7 +116,7 @@ router.get('/', protect, getDashboardData);
  *       500:
  *         description: Server xətası
  */
-router.get('/weekly-attendance', protect, getWeeklyAttendance);
+router.get("/weekly-attendance", protect, getWeeklyAttendance);
 
 /**
  * @swagger
@@ -158,7 +158,7 @@ router.get('/weekly-attendance', protect, getWeeklyAttendance);
  *       500:
  *         description: Server xətası
  */
-router.get('/department/:department', protect, getDepartmentDetails);
+router.get("/department/:department", protect, getDepartmentDetails);
 
 /**
  * @swagger
@@ -195,7 +195,7 @@ router.get('/department/:department', protect, getDepartmentDetails);
  *       500:
  *         description: Server xətası
  */
-router.get('/payment-statistics', protect, getPaymentStatistics);
+router.get("/payment-statistics", protect, getPaymentStatistics);
 
 /**
  * @swagger
@@ -226,7 +226,7 @@ router.get('/payment-statistics', protect, getPaymentStatistics);
  *       500:
  *         description: Server xətası
  */
-router.get('/employee-group-stats', protect, getEmployeeGroupStats);
+router.get("/employee-group-stats", protect, getEmployeeGroupStats);
 
 /**
  * @swagger
@@ -257,7 +257,7 @@ router.get('/employee-group-stats', protect, getEmployeeGroupStats);
  *       500:
  *         description: Server xətası
  */
-router.get('/realtime', protect, getRealTimeDashboard);
+router.get("/realtime", protect, getRealTimeDashboard);
 
 /**
  * @swagger
@@ -288,7 +288,7 @@ router.get('/realtime', protect, getRealTimeDashboard);
  *       500:
  *         description: Server xətası
  */
-router.get('/balance-breakdown', protect, getBalanceBreakdownPercentages);
+router.get("/balance-breakdown", protect, getBalanceBreakdownPercentages);
 
 /**
  * @swagger
@@ -314,7 +314,7 @@ router.get('/balance-breakdown', protect, getBalanceBreakdownPercentages);
  *       500:
  *         description: Server xətası
  */
-router.get('/payment-analytics', protect, getPaymentAnalytics);
+router.get("/payment-analytics", protect, getPaymentAnalytics);
 
 /**
  * @swagger
@@ -346,7 +346,7 @@ router.get('/payment-analytics', protect, getPaymentAnalytics);
  *       500:
  *         description: Server xətası
  */
-router.get('/employee-flow-stats', protect, getEmployeeFlowStats);
+router.get("/employee-flow-stats", protect, getEmployeeFlowStats);
 
 /**
  * @swagger
@@ -379,7 +379,7 @@ router.get('/employee-flow-stats', protect, getEmployeeFlowStats);
  *       500:
  *         description: Server xətası
  */
-router.get('/user-statistics', protect, getUserStatistics);
+router.get("/user-statistics", protect, getUserStatistics);
 
 /**
  * @swagger
@@ -407,6 +407,6 @@ router.get('/user-statistics', protect, getUserStatistics);
  *       500:
  *         description: Server xətası
  */
-router.get('/test', protect, testDashboard);
+router.get("/test", protect, testDashboard);
 
 export default router;
