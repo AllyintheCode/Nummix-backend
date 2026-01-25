@@ -29,26 +29,6 @@ const router = express.Router();
  *     description: İstifadəçi qeydiyyatı və giriş əməliyyatları
  *   - name: Users
  *     description: İstifadəçi CRUD əməliyyatları
- *   - name: Financial
- *     description: Maliyyə məlumatları idarəetməsi
- *   - name: Events
- *     description: Tədbir idarəetməsi
- *   - name: Payments
- *     description: Ödəniş idarəetməsi
- *   - name: Employee Flow
- *     description: İşçi axını idarəetməsi
- *   - name: Accounting
- *     description: Mühasibat uçotu əməliyyatları
- *   - name: Asset Categories
- *     description: Əsas vəsait kateqoriyaları
- *   - name: Assets
- *     description: Əsas vəsaitlər
- *   - name: Category Reports
- *     description: Kateqoriya hesabatları
- *   - name: Department Reports
- *     description: Şöbə hesabatları
- *   - name: Reports
- *     description: Excel və PDF hesabatlar
  */
 
 // ===================== 🔐 AUTH ROUTES =====================
@@ -395,7 +375,6 @@ router.get("/profile", protect, getProfile);
  *   get:
  *     summary: ID-ə görə istifadəçi məlumatı
  *     tags: [Users]
- *     description: Müəyyən edilmiş ID-yə uyğun istifadəçi məlumatını qaytarır
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -408,6 +387,23 @@ router.get("/profile", protect, getProfile);
  *     responses:
  *       200:
  *         description: İstifadəçi məlumatları
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 fullName:
+ *                   type: string
+ *                 companyName:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                 isVerified:
+ *                   type: boolean
  *       404:
  *         description: İstifadəçi tapılmadı
  *       500:
@@ -416,7 +412,6 @@ router.get("/profile", protect, getProfile);
  *   put:
  *     summary: İstifadəçi məlumatlarını yenilə
  *     tags: [Users]
- *     description: Müəyyən edilmiş istifadəçinin məlumatlarını yeniləyir
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -443,6 +438,21 @@ router.get("/profile", protect, getProfile);
  *     responses:
  *       200:
  *         description: İstifadəçi uğurla yeniləndi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 fullName:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *       400:
+ *         description: Yanlış sorğu
+ *       403:
+ *         description: İcazə yoxdur
  *       404:
  *         description: İstifadəçi tapılmadı
  *       500:
@@ -451,7 +461,6 @@ router.get("/profile", protect, getProfile);
  *   delete:
  *     summary: İstifadəçi sil
  *     tags: [Users]
- *     description: Müəyyən edilmiş istifadəçini sistemdən silir
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -463,6 +472,15 @@ router.get("/profile", protect, getProfile);
  *     responses:
  *       200:
  *         description: İstifadəçi uğurla silindi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: İcazə yoxdur
  *       404:
  *         description: İstifadəçi tapılmadı
  *       500:
@@ -470,10 +488,7 @@ router.get("/profile", protect, getProfile);
  */
 
 router.get("/:id", protect, getUserById);
-router.put("/:id", updateUser);
+router.put("/:id", protect, updateUser);
 router.delete("/:id", protect, deleteUser);
-
-
-
 
 export default router;
