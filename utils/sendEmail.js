@@ -4,12 +4,12 @@ dotenv.config();
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const sendEmail = async (to, subject, text) => {
+const sendEmail = async (to, otp) => {
   return resend.emails.send({
-    from: "Nummix <onboarding@resend.dev>",
-    to,
-    subject,
-    text,
+    from: "Nummix <no-reply@nummix.az>", // öz domenin
+    to: to, // istifadəçinin email-i
+    subject: "OTP kodunuz",
+    text: `Sizin təsdiq kodunuz: ${otp}`,
   });
 };
 
