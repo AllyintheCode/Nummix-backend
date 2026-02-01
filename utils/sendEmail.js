@@ -1,15 +1,23 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465, // SSL portu
+  secure: true, // SSL
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS, // Gmail App Password
+  },
+});
 
 const sendEmail = async (to, otp) => {
-  return resend.emails.send({
-    from: "Nummix <no-reply@nummix.az>", // öz domenin
-    to: to, // istifadəçinin email-i
+  await transporter.sendMail({
+    from: `"Nummix" <${process.env.GMAIL_USER}>`,
+    to,
     subject: "OTP kodunuz",
-    text: `Sizin təsdiq kodunuz: ${otp}`,
+    text: `Sizin OTP kodunuz: ${otp}`,
   });
 };
 
