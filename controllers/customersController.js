@@ -4,6 +4,7 @@ export const getAllCustomers = async (req, res) => {
     try {
         const customers = await Customer.find({
             userId: req.user?._id,
+            isActive: true,
         }).sort({
             createdAt: -1,
         });
@@ -46,7 +47,7 @@ export const createCustomer = async (req, res) => {
     try {
         const { companyName, contactPerson, email, address, phone, taxNumber, segment } = req.body;
 
-        if (!companyName || !contactPerson || !email || !address || !phone || !taxNumber || !segment) {
+        if (!companyName || !contactPerson || !email || !address || !phone || !taxNumber) {
             return res.status(400).json({ message: "All fields are required." });
         }
 
@@ -58,7 +59,7 @@ export const createCustomer = async (req, res) => {
             address,
             phone,
             taxNumber,
-            segment,
+            segment: segment || "General",
         });
 
         const savedCustomer = await newCustomer.save();
@@ -68,6 +69,7 @@ export const createCustomer = async (req, res) => {
             data: savedCustomer,
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -89,7 +91,7 @@ export const editCustomer = async (req, res) => {
         customer.email = req.body.email || customer.email;
         customer.address = req.body.address || customer.address;
         customer.phone = req.body.phone || customer.phone;
-        customer.taxNumber = req.body.tin || customer.tin;
+        customer.taxNumber = req.body.taxNumber || customer.taxNumber;
         customer.segment = req.body.segment || customer.segment;
 
         await customer.save();

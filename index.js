@@ -46,16 +46,16 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // --- Rate limiter (app initialization) ---
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 dəqiqə
-  max: 10, // hər IP maksimum 10 sorğu
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Çox sorğu göndərdiniz, bir az gözləyin" },
+    windowMs: 15 * 60 * 1000, // 15 dəqiqə
+    max: 10, // hər IP maksimum 10 sorğu
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Çox sorğu göndərdiniz, bir az gözləyin" },
 });
 
 // --- Test route ---
 app.get("/", (req, res) => {
-  res.send("Nummix backend işləyir 🚀");
+    res.send("Nummix backend işləyir 🚀");
 });
 
 // --- Swagger ---
@@ -63,17 +63,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const options = {
-  definition: {
-    openapi: "3.0.0",
-    info: { title: "My API", version: "1.0.0" },
-    components: {
-      securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-      },
+    definition: {
+        openapi: "3.0.0",
+        info: { title: "My API", version: "1.0.0" },
+        components: {
+            securitySchemes: {
+                bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+            },
+        },
+        security: [{ bearerAuth: [] }],
     },
-    security: [{ bearerAuth: [] }],
-  },
-  apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
+    apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
@@ -101,7 +101,7 @@ app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
 app.use("/api/chatbot", chatbotRoute);
-app.use("/api/payments", paymentsRoute);
+app.use("/api/transaction-payments", paymentsRoute);
 app.use("/api/dashboards", dashboardRoutess);
 app.use("/api/stats", statRoute);
 

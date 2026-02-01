@@ -4,7 +4,8 @@ import Supplier from "../models/suppliersSchema.js";
 export const getAllSupplierPayments = async (req, res) => {
     try {
         const supplierPayments = await SupplierPayment.find({
-            userId: req.user?._id
+            userId: req.user?._id,
+            isActive: true,
         }).sort({
             createdAt: -1,
         });
@@ -28,7 +29,11 @@ export const getSingleSupplierPayment = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Supplier payment ID must be provided." });
         }
-        const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
+        const supplierPayment = await SupplierPayment.findOne({
+            _id: id,
+            userId: req.user?._id,
+            isActive: true,
+        });
 
         if (!supplierPayment) {
             return res.status(404).json({ message: "Supplier payment not found." });

@@ -3,9 +3,11 @@ import Payment from "../models/paymentsSchema.js";
 
 export const getAllPayments = async (req, res) => {
     try {
-        const payments = await Payment.find({ userId: req.user?._id }).sort({
-            createdAt: -1,
-        });
+        const payments = await Payment.find({ userId: req.user?._id })
+            .sort({
+                createdAt: -1,
+            })
+            .populate("customerId");
 
         if (!payments || !payments.length) {
             return res.status(404).json({ message: "No payments found." });
@@ -26,7 +28,7 @@ export const getSinglePayment = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Payment ID must be provided." });
         }
-        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
+        const payment = await Payment.findOne({ _id: id, userId: req.user?._id }).populate("customerId");
 
         if (!payment) {
             return res.status(404).json({ message: "Payment not found." });
@@ -46,6 +48,15 @@ export const createPayment = async (req, res) => {
         const { date, customerId, invoiceNumber, amount, method, status, notes } = req.body;
 
         if (!date || !customerId || !invoiceNumber || !amount || !method || !status) {
+            console.log({
+                date: date,
+                customerId: customerId,
+                invoiceNumber: invoiceNumber,
+                amount: amount,
+                method: method,
+                status: status,
+            });
+
             return res.status(400).json({ message: "All fields are required." });
         }
 
@@ -82,7 +93,7 @@ export const editPayment = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Payment ID must be provided." });
         }
-        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
+        const payment = await Payment.findOne({ _id: id, userId: req.user?._id }).populate("customerId");
 
         if (!payment) {
             return res.status(404).json({ message: "Payment record not found." });
@@ -96,7 +107,11 @@ export const editPayment = async (req, res) => {
         payment.notes = req.body.notes || payment.notes;
 
         if (req.body.customerId) {
-            const customer = await Customer.findOne({ _id: req.body.customerId, userId: req.user?._id });
+            const customer = await Customer.findOne({
+                _id: req.body.customerId,
+                userId: req.user?._id,
+            }).populate("customerId");
+
             if (!customer) {
                 return res.status(404).json({ message: "Customer not found." });
             }
@@ -110,6 +125,8 @@ export const editPayment = async (req, res) => {
             data: payment,
         });
     } catch (error) {
+        console.log(error);
+
         res.status(500).json({ message: "Internal server error." });
     }
 };

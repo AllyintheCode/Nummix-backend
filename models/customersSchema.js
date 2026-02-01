@@ -10,7 +10,7 @@ const CustomerSchema = new mongoose.Schema(
         phone: { type: String, trim: true, index: true },
 
         taxNumber: { type: String, trim: true, index: true, sparse: true }, // VÖEN (Tax ID)
-        segment: { type: String, trim: true, default: "General" },
+        segment: { type: String, enum: ["Overdue", "New", "General"], default: "General" },
         totalSales: { type: Number, default: 0 },
         balance: { type: Number, default: 0 },
 
@@ -19,7 +19,7 @@ const CustomerSchema = new mongoose.Schema(
 
         isActive: { type: Boolean, default: true },
     },
-    { timestamps: true }
+    { timestamps: true },
 );
 
 const Customer = mongoose.model("Customer", CustomerSchema);
