@@ -6,10 +6,10 @@ const CustomerSchema = new mongoose.Schema(
         companyName: { type: String, required: true, trim: true },
         contactPerson: { type: String, required: true, trim: true, index: true },
         email: { type: String, required: true, trim: true, unique: true },
-        location: { type: String, trim: true },
+        address: { type: String, trim: true },
         phone: { type: String, trim: true, index: true },
 
-        tin: { type: String, trim: true, index: true, sparse: true }, // VÖEN (Tax ID)
+        taxNumber: { type: String, trim: true, index: true, sparse: true }, // VÖEN (Tax ID)
         segment: { type: String, trim: true },
         totalSales: { type: Number, default: 0 },
         balance: { type: Number, default: 0 },

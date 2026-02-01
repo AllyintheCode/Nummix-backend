@@ -43,7 +43,7 @@ export const getSingleOrder = async (req, res) => {
 
 export const createOrder = async (req, res) => {
     try {
-        const { orderNumber, supplierId, date, deliveryDate, amount, status } = req.body;
+        const { orderNumber, supplierId, date, deliveryDate, amount, status, notes } = req.body;
 
         if (!orderNumber || !supplierId || !date || !deliveryDate || amount == null) {
             return res.status(400).json({ message: "All required fields must be provided." });
@@ -62,6 +62,7 @@ export const createOrder = async (req, res) => {
             deliveryDate,
             amount,
             status,
+            notes,
         });
 
         const savedOrder = await newOrder.save();
@@ -92,6 +93,7 @@ export const editOrder = async (req, res) => {
         order.deliveryDate = req.body.deliveryDate || order.deliveryDate;
         order.amount = req.body.amount ?? order.amount;
         order.status = req.body.status || order.status;
+        order.notes = req.body.notes || order.notes;
 
         if (req.body.supplierId) {
             const supplier = await Supplier.findOne({ _id: req.body.supplierId, userId: req.user?._id });

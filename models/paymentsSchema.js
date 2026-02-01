@@ -8,11 +8,13 @@ const PaymentSchema = new mongoose.Schema(
         invoiceNumber: { type: String, required: true, trim: true, unique: true },
         amount: { type: Number, required: true },
         method: { type: String, enum: ["Cash", "Credit Card", "Bank Transfer"], required: true },
-        status: { type: String, enum: ["Pending", "Completed", "Cancelled"], default: "Pending" },
+        status: { type: String, enum: ["Pending", "Completed", "Cancelled", "Overdue"], default: "Pending" },
+
+        notes: { type: String, trim: true },
 
         isActive: { type: Boolean, default: true },
     },
-    { timestamps: true }
+    { timestamps: true },
 );
 
 const Payment = mongoose.model("Payments", PaymentSchema);

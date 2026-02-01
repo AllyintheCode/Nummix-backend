@@ -49,9 +49,17 @@ const options = {
     definition: {
         openapi: "3.0.0",
         info: {
-            title: "My API",
-            version: "1.0.0",
+            title: "Nummix Backend API",
+            version: "1.1.0",
+            description:
+                "Backend API for Nummix covering users, customers, sales, suppliers, agreements, orders, products, warehouse operations, inventory, and payments.",
         },
+        servers: [
+            {
+                url: `http://localhost:${process.env.PORT || 5000}`,
+                description: "Local development server",
+            },
+        ],
         components: {
             securitySchemes: {
                 bearerAuth: {

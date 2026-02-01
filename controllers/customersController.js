@@ -44,9 +44,9 @@ export const getSingleCustomer = async (req, res) => {
 
 export const createCustomer = async (req, res) => {
     try {
-        const { companyName, contactPerson, email, location, phone, tin, segment } = req.body;
+        const { companyName, contactPerson, email, address, phone, taxNumber, segment } = req.body;
 
-        if (!companyName || !contactPerson || !email || !location || !phone || !tin || !segment) {
+        if (!companyName || !contactPerson || !email || !address || !phone || !taxNumber || !segment) {
             return res.status(400).json({ message: "All fields are required." });
         }
 
@@ -55,9 +55,9 @@ export const createCustomer = async (req, res) => {
             companyName,
             contactPerson,
             email,
-            location,
+            address,
             phone,
-            tin,
+            taxNumber,
             segment,
         });
 
@@ -87,9 +87,9 @@ export const editCustomer = async (req, res) => {
         customer.companyName = req.body.companyName || customer.companyName;
         customer.contactPerson = req.body.contactPerson || customer.contactPerson;
         customer.email = req.body.email || customer.email;
-        customer.location = req.body.location || customer.location;
+        customer.address = req.body.address || customer.address;
         customer.phone = req.body.phone || customer.phone;
-        customer.tin = req.body.tin || customer.tin;
+        customer.taxNumber = req.body.tin || customer.tin;
         customer.segment = req.body.segment || customer.segment;
 
         await customer.save();

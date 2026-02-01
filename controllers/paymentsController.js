@@ -43,7 +43,7 @@ export const getSinglePayment = async (req, res) => {
 
 export const createPayment = async (req, res) => {
     try {
-        const { date, customerId, invoiceNumber, amount, method, status } = req.body;
+        const { date, customerId, invoiceNumber, amount, method, status, notes } = req.body;
 
         if (!date || !customerId || !invoiceNumber || !amount || !method || !status) {
             return res.status(400).json({ message: "All fields are required." });
@@ -62,6 +62,7 @@ export const createPayment = async (req, res) => {
             amount,
             method,
             status,
+            notes,
         });
 
         const savedPayment = await newPayment.save();
@@ -92,6 +93,7 @@ export const editPayment = async (req, res) => {
         payment.amount = req.body.amount || payment.amount;
         payment.method = req.body.method || payment.method;
         payment.status = req.body.status || payment.status;
+        payment.notes = req.body.notes || payment.notes;
 
         if (req.body.customerId) {
             const customer = await Customer.findOne({ _id: req.body.customerId, userId: req.user?._id });
