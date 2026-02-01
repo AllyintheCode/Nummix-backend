@@ -2,6 +2,15 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
+import employeeRoutes from "./routes/employeeRoutes.js";
+import transactionRoutes from "./routes/transactionRoutes.js";
+import cashAndBankRoutes from "./routes/cashAndBankRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import budgetRoutes from "./routes/budgetRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import generalLedgerRoutes from "./routes/generalLedgerRoutes.js";
+import payrollRoutes from "./routes/payrollroute.js";
+import assetsRoutes from "./routes/assets.js";
 import customerRoutes from "./routes/customersRoute.js";
 import salesRoute from "./routes/salesRoute.js";
 import suppliersRoute from "./routes/suppliersRoute.js";
@@ -15,71 +24,72 @@ import paymentsRoute from "./routes/paymentsRoute.js";
 import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
-
-import swaggerUi from "swagger-ui-express";
+import { specs, swaggerUi } from "./swagger.js";
 import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 import { fileURLToPath } from "url";
+import chatbotRoute from "./routes/chatbotRoute.js";
+import dashboardRoutess from "./routes/hrDashboardRoute.js";
+import statRoute from "./routes/statsRoute.js";
 
 dotenv.config();
+
 const app = express();
 
-// middlewares
+// --- TRUST PROXY (Render üçün) ---
+app.set("trust proxy", 1); // bu X-Forwarded-For header üçün mütləqdir
+
+// --- Middlewares ---
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 dəqiqə
-    max: 10, // hər IP maksimum 10 sorğu
-    message: "Çox sorğu göndərdiniz, bir az gözləyin",
+// --- Rate limiter (app initialization) ---
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 dəqiqə
+  max: 10, // hər IP maksimum 10 sorğu
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Çox sorğu göndərdiniz, bir az gözləyin" },
 });
 
-// login və register routelara tətbiq et
-
-app.use("/api/users/register", limiter);
-
+// --- Test route ---
 app.get("/", (req, res) => {
-    res.send("Nummix backend işləyir 🚀");
+  res.send("Nummix backend işləyir 🚀");
 });
 
+// --- Swagger ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const options = {
-    definition: {
-        openapi: "3.0.0",
-        info: {
-            title: "Nummix Backend API",
-            version: "1.1.0",
-            description:
-                "Backend API for Nummix covering users, customers, sales, suppliers, agreements, orders, products, warehouse operations, inventory, and payments.",
-        },
-        servers: [
-            {
-                url: `http://localhost:${process.env.PORT || 5000}`,
-                description: "Local development server",
-            },
-        ],
-        components: {
-            securitySchemes: {
-                bearerAuth: {
-                    type: "http",
-                    scheme: "bearer",
-                    bearerFormat: "JWT",
-                },
-            },
-        },
-        security: [{ bearerAuth: [] }],
+  definition: {
+    openapi: "3.0.0",
+    info: { title: "My API", version: "1.0.0" },
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
     },
-    apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
+    security: [{ bearerAuth: [] }],
+  },
+  apis: [path.join(__dirname, "routes/*.js"), path.join(__dirname, "index.js")],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
-
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-connectDB();
+// --- Routes ---
+app.use("/api/users/register", authLimiter);
 app.use("/api/users", userRoutes);
+app.use("/api/employees", employeeRoutes);
+app.use("/api/transactions", transactionRoutes);
+app.use("/api/cash-bank", cashAndBankRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/budgets", budgetRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/general-ledger", generalLedgerRoutes);
+app.use("/api/payroll", payrollRoutes);
+app.use("/api/assets", assetsRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/sales", salesRoute);
 app.use("/api/suppliers", suppliersRoute);
@@ -90,7 +100,12 @@ app.use("/api/products", productsRoute);
 app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
+app.use("/api/chatbot", chatbotRoute);
 app.use("/api/payments", paymentsRoute);
+app.use("/api/dashboards", dashboardRoutess);
+app.use("/api/stats", statRoute);
 
-const PORT = process.env.PORT;
-app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir`));
+connectDB();
+// --- Server ---
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir 🚀`));
