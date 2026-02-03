@@ -1,9 +1,9 @@
 import Customer from "../models/customersSchema.js";
-import Payment from "../models/paymentsSchema.js";
+import TransactionPayment from "../models/transactionPaymentSchema.js";
 
-export const getAllPayments = async (req, res) => {
+export const getAllTransactionPayments = async (req, res) => {
     try {
-        const payments = await Payment.find({ userId: req.user?._id })
+        const payments = await TransactionPayment.find({ userId: req.user?._id, isActive: true })
             .sort({
                 createdAt: -1,
             })
@@ -14,7 +14,7 @@ export const getAllPayments = async (req, res) => {
         }
 
         res.status(200).json({
-            message: "Payments retrieved successfully",
+            message: "TransactionPayments retrieved successfully",
             data: payments,
         });
     } catch (error) {
@@ -22,20 +22,24 @@ export const getAllPayments = async (req, res) => {
     }
 };
 
-export const getSinglePayment = async (req, res) => {
+export const getSingleTransactionPayment = async (req, res) => {
     try {
         const { id } = req.params;
         if (!id) {
-            return res.status(400).json({ message: "Payment ID must be provided." });
+            return res.status(400).json({ message: "TransactionPayment ID must be provided." });
         }
-        const payment = await Payment.findOne({ _id: id, userId: req.user?._id }).populate("customerId");
+        const payment = await TransactionPayment.findOne({
+            _id: id,
+            userId: req.user?._id,
+            isActive: true,
+        }).populate("customerId");
 
         if (!payment) {
-            return res.status(404).json({ message: "Payment not found." });
+            return res.status(404).json({ message: "TransactionPayment not found." });
         }
 
         res.status(200).json({
-            message: "Payment retrieved successfully",
+            message: "TransactionPayment retrieved successfully",
             data: payment,
         });
     } catch (error) {
@@ -43,20 +47,11 @@ export const getSinglePayment = async (req, res) => {
     }
 };
 
-export const createPayment = async (req, res) => {
+export const createTransactionPayment = async (req, res) => {
     try {
         const { date, customerId, invoiceNumber, amount, method, status, notes } = req.body;
 
         if (!date || !customerId || !invoiceNumber || !amount || !method || !status) {
-            console.log({
-                date: date,
-                customerId: customerId,
-                invoiceNumber: invoiceNumber,
-                amount: amount,
-                method: method,
-                status: status,
-            });
-
             return res.status(400).json({ message: "All fields are required." });
         }
 
@@ -65,7 +60,7 @@ export const createPayment = async (req, res) => {
             return res.status(404).json({ message: "Customer not found." });
         }
 
-        const newPayment = new Payment({
+        const newTransactionPayment = new TransactionPayment({
             userId: req.user?._id,
             date,
             customerId,
@@ -76,27 +71,29 @@ export const createPayment = async (req, res) => {
             notes,
         });
 
-        const savedPayment = await newPayment.save();
+        const savedTransactionPayment = await newTransactionPayment.save();
 
         res.status(201).json({
-            message: "Payment record created successfully",
-            data: savedPayment,
+            message: "TransactionPayment record created successfully",
+            data: savedTransactionPayment,
         });
     } catch (error) {
         res.status(500).json({ message: "Internal server error." });
     }
 };
 
-export const editPayment = async (req, res) => {
+export const editTransactionPayment = async (req, res) => {
     try {
         const { id } = req.params;
         if (!id) {
-            return res.status(400).json({ message: "Payment ID must be provided." });
+            return res.status(400).json({ message: "TransactionPayment ID must be provided." });
         }
-        const payment = await Payment.findOne({ _id: id, userId: req.user?._id }).populate("customerId");
+        const payment = await TransactionPayment.findOne({ _id: id, userId: req.user?._id }).populate(
+            "customerId",
+        );
 
         if (!payment) {
-            return res.status(404).json({ message: "Payment record not found." });
+            return res.status(404).json({ message: "TransactionPayment record not found." });
         }
 
         payment.date = req.body.date || payment.date;
@@ -110,7 +107,7 @@ export const editPayment = async (req, res) => {
             const customer = await Customer.findOne({
                 _id: req.body.customerId,
                 userId: req.user?._id,
-            }).populate("customerId");
+            });
 
             if (!customer) {
                 return res.status(404).json({ message: "Customer not found." });
@@ -120,9 +117,13 @@ export const editPayment = async (req, res) => {
 
         await payment.save();
 
+        const newPayment = await TransactionPayment.findOne({ _id: id, userId: req.user?._id }).populate(
+            "customerId",
+        );
+
         res.status(200).json({
-            message: "Payment record updated successfully",
-            data: payment,
+            message: "TransactionPayment record updated successfully",
+            data: newPayment,
         });
     } catch (error) {
         console.log(error);
@@ -131,23 +132,23 @@ export const editPayment = async (req, res) => {
     }
 };
 
-export const changePaymentStatus = async (req, res) => {
+export const changeTransactionPaymentStatus = async (req, res) => {
     try {
         const { id } = req.params;
         if (!id) {
-            return res.status(400).json({ message: "Payment ID must be provided." });
+            return res.status(400).json({ message: "TransactionPayment ID must be provided." });
         }
-        const payment = await Payment.findOne({ _id: id, userId: req.user?._id });
+        const payment = await TransactionPayment.findOne({ _id: id, userId: req.user?._id });
 
         if (!payment) {
-            return res.status(404).json({ message: "Payment record not found." });
+            return res.status(404).json({ message: "TransactionPayment record not found." });
         }
 
         payment.isActive = !payment.isActive;
         await payment.save();
 
         res.status(200).json({
-            message: "Payment record updated successfully",
+            message: "TransactionPayment record updated successfully",
             data: payment,
         });
     } catch (error) {

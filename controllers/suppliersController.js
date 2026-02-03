@@ -4,6 +4,7 @@ export const getAllSuppliers = async (req, res) => {
     try {
         const suppliers = await Supplier.find({
             userId: req.user?._id,
+            isActive: true,
         }).sort({
             createdAt: -1,
         });
@@ -27,7 +28,7 @@ export const getSingleSupplier = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Supplier ID must be provided." });
         }
-        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
+        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
@@ -67,6 +68,7 @@ export const createSupplier = async (req, res) => {
             data: savedSupplier,
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -97,6 +99,7 @@ export const editSupplier = async (req, res) => {
             data: supplier,
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };

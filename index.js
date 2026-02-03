@@ -20,7 +20,7 @@ import ordersRoute from "./routes/ordersRoute.js";
 import productsRoute from "./routes/productsRoute.js";
 import warehousesRoute from "./routes/warehousesRoute.js";
 import warehouseOperationsRoute from "./routes/warehouseOperationsRoute.js";
-import paymentsRoute from "./routes/paymentsRoute.js";
+import transactionPaymentsRoutes from "./routes/transactionPaymentsRoutes.js";
 import inventoryRoute from "./routes/inventoryRoute.js";
 import { connectDB } from "./config/db.js";
 import rateLimit from "express-rate-limit";
@@ -101,7 +101,7 @@ app.use("/api/warehouses", warehousesRoute);
 app.use("/api/warehouse-operations", warehouseOperationsRoute);
 app.use("/api/inventory", inventoryRoute);
 app.use("/api/chatbot", chatbotRoute);
-app.use("/api/transaction-payments", paymentsRoute);
+app.use("/api/transaction-payments", transactionPaymentsRoutes);
 app.use("/api/dashboards", dashboardRoutess);
 app.use("/api/stats", statRoute);
 

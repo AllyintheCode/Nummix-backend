@@ -7,9 +7,8 @@ const SupplierSchema = new mongoose.Schema(
         taxId: { type: String, required: true, trim: true, unique: true },
         contactPerson: { type: String, required: true, trim: true },
         phone: { type: String, required: true, trim: true },
-        email: { type: String, required: true, trim: true, unique: true },
+        email: { type: String, required: true, trim: true },
         address: { type: String, required: true, trim: true },
-        // category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", trim: true },
 
         isActive: { type: Boolean, default: true },
     },

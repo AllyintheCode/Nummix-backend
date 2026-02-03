@@ -1,5 +1,4 @@
 import SupplierPayment from "../models/supplierPaymentsSchema.js";
-import Supplier from "../models/suppliersSchema.js";
 
 export const getAllSupplierPayments = async (req, res) => {
     try {
@@ -56,7 +55,7 @@ export const createSupplierPayment = async (req, res) => {
             return res.status(400).json({ message: "All required fields must be provided." });
         }
 
-        const supplier = await Supplier.findOne({ _id: supplierId, userId: req.user?._id });
+        const supplier = await SupplierPayment.findOne({ _id: supplierId, userId: req.user?._id });
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
         }
@@ -127,7 +126,9 @@ export const changeSupplierPaymentStatus = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Supplier payment ID must be provided." });
         }
-        const supplierPayment = await SupplierPayment.findOne({ _id: id, userId: req.user?._id });
+        const supplierPayment = await SupplierPayment.findById(id);
+
+        console.log(id, supplierPayment);
 
         if (!supplierPayment) {
             return res.status(404).json({ message: "Supplier payment not found." });
