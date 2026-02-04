@@ -1,40 +1,47 @@
 // routes/assets.js
 import express from "express";
 import {
-  // Vəsait əməliyyatları
   getAllAssets,
   getAssetById,
   createAsset,
   updateAsset,
   deleteAsset,
+  getAssetStats,
   getAssetDocument,
-
-  // Kateqoriya əməliyyatları
-  getCategories,
-  createCategory,
-  updateCategory,
-  deleteCategory,
-
-  // Hesabatlar
-  getReports,
-
-  // Statistikalar
-  getAssetStatistics,
-  getDepartmentValues,
-  getPreviousReports,
-
-  // Sənəd əməliyyatları
   uploadAssetDocument,
   deleteAssetDocument,
   downloadAssetDocument,
-
-  // Export əməliyyatları
+  exportAssetsToExcel,
+  testSimpleExcel,
+  updateAssetStatus,
+  searchAssets,
   downloadAllAssetsExcel,
+  generateAndDownloadExcel,
+  generateAndDownloadPdf,
+  downloadCategoryExcel,
+  getPreviousReports,
+  exportSearchResultsToExcel,
   downloadAmortizationReportPDF,
   downloadFormattedAmortizationPDF,
-  getAssetsExportPage,
-  testSimpleExcel,
   testSimplePDF,
+  getAssetStatistics,
+  getSimpleAssetStatistics,
+  getDepartmentValues,
+  getSimpleDepartmentValues,
+  getAssetsExportPage,
+  downloadAssetsCSV,
+    getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getCategoryDetails,
+  loadDefaultCategories,
+    getReports,
+  getReportDetails,
+  deleteReport,
+  cleanupOldReports
+
+
 } from "../controllers/assetController.js";
 
 import {
@@ -46,351 +53,497 @@ import protect from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
+
 /**
  * @swagger
  * tags:
- *   - name: Assets
- *     description: Vəsait idarəetmə əməliyyatları
- *   - name: Categories
- *     description: Kateqoriya idarəetmə əməliyyatları
- *   - name: Reports
- *     description: Hesabat və statistikalar
- *   - name: Documents
- *     description: Sənəd idarəetmə əməliyyatları
- *   - name: Export
- *     description: Export və fayl yükləmə əməliyyatları
+ *   name: Assets
+ *   description: Vəsaitlərlə bağlı əməliyyatlar
  */
 
 /**
  * @swagger
- * components:
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- *
- *   schemas:
- *     Asset:
- *       type: object
- *       required:
- *         - name
- *         - category
- *         - account
- *         - location
- *         - initialValue
- *         - currentValue
- *         - purchaseDate
- *       properties:
- *         _id:
+ * tags:
+ *   name: Categories
+ *   description: Kateqoriya əməliyyatları
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   name: Reports
+ *   description: Hesabat əməliyyatları
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   name: Exports
+ *   description: İxrac əməliyyatları
+ */
+
+/**
+ * @swagger
+ * tags:
+ *   name: Statistics
+ *   description: Statistik əməliyyatlar
+ */
+
+// ===================== KATEQORİYA ƏMƏLİYYATLARI =====================
+// ===================== HESABAT ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/reports/previous:
+ *   get:
+ *     summary: Əvvəlki hesabatları gətir
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           description: Asset-in avtomatik yaranan ID-si
- *           example: "507f1f77bcf86cd799439011"
- *         inventoryNumber:
+ *     responses:
+ *       200:
+ *         description: Əvvəlki hesabatlar uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/reports/previous', protect, getPreviousReports);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/reports:
+ *   get:
+ *     summary: Bütün hesabatları gətir
+ *     tags: [Reports]
+ *     description: |
+ *       İstifadəçinin bütün hesabatlarını gətirir.
+ *       Filtirləmə parametrləri:
+ *       - type: Hesabat tipi (excel, pdf, all)
+ *       - startDate: Başlanğıc tarix
+ *       - endDate: Bitmə tarix
+ *       - limit: Hər səhifədəki element sayı
+ *       - page: Səhifə nömrəsi
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           description: İnventar nömrəsi
- *           example: "INV-001"
- *         name:
+ *       - name: type
+ *         in: query
+ *         schema:
  *           type: string
- *           description: Vəsaitin adı
- *           example: "Dizüstü Kompüter"
- *         category:
- *           type: string
- *           description: Kateqoriya
- *           example: "Texnika"
- *         account:
- *           type: string
- *           description: Hesab kodu
- *           example: "543"
- *         location:
- *           type: string
- *           description: Yerləşdiyi yer
- *           example: "Baş Ofis"
- *         initialValue:
- *           type: number
- *           format: double
- *           description: İlkin dəyər
- *           example: 2500.00
- *         currentValue:
- *           type: number
- *           format: double
- *           description: Cari dəyər
- *           example: 2000.00
- *         amortization:
- *           type: number
- *           format: double
- *           description: Amortizasiya məbləği
- *           example: 500.00
- *         amortizationPercentage:
- *           type: number
- *           format: double
- *           description: Amortizasiya faizi
- *           example: 20.00
- *         status:
- *           type: string
- *           enum: [Aktiv, Passiv, Satılıb, Sıradan çıxıb]
- *           description: Status
- *           default: "Aktiv"
- *           example: "Aktiv"
- *         purchaseDate:
- *           type: string
- *           format: date
- *           description: Alınma tarixi
- *           example: "2024-01-15"
- *         serviceLife:
- *           type: number
- *           description: Xidmət müddəti (il)
- *           example: 5
- *         notes:
- *           type: string
- *           description: Əlavə qeydlər
- *           example: "Test üçün yaradılıb"
- *         createdAt:
- *           type: string
- *           format: date-time
- *           example: "2024-01-15T10:30:00Z"
- *         updatedAt:
- *           type: string
- *           format: date-time
- *           example: "2024-01-15T10:30:00Z"
- *
- *     AssetInput:
- *       type: object
- *       required:
- *         - name
- *         - category
- *         - account
- *         - location
- *         - initialValue
- *         - currentValue
- *         - purchaseDate
- *       properties:
- *         inventoryNumber:
- *           type: string
- *           example: "INV-001"
- *         name:
- *           type: string
- *           example: "Dizüstü Kompüter"
- *         category:
- *           type: string
- *           example: "Texnika"
- *         account:
- *           type: string
- *           example: "543"
- *         location:
- *           type: string
- *           example: "Baş Ofis"
- *         initialValue:
- *           type: number
- *           format: double
- *           example: 2500.00
- *         currentValue:
- *           type: number
- *           format: double
- *           example: 2000.00
- *         purchaseDate:
+ *           enum: [all, excel, pdf]
+ *           default: all
+ *         description: Hesabat tipi
+ *       - name: startDate
+ *         in: query
+ *         schema:
  *           type: string
  *           format: date
- *           example: "2024-01-15"
- *         serviceLife:
- *           type: number
- *           example: 5
- *         notes:
+ *         description: Başlanğıc tarix (YYYY-MM-DD)
+ *       - name: endDate
+ *         in: query
+ *         schema:
  *           type: string
- *           example: "Test üçün yaradılıb"
- *
- *     Category:
- *       type: object
- *       required:
- *         - name
- *       properties:
- *         _id:
+ *           format: date
+ *         description: Bitmə tarix (YYYY-MM-DD)
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Hər səhifədəki element sayı
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Səhifə nömrəsi
+ *     responses:
+ *       200:
+ *         description: Hesabatlar uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/reports', protect, getReports);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/reports/{reportId}:
+ *   get:
+ *     summary: Hesabat təfərrüatlarını gətir
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           example: "507f1f77bcf86cd799439012"
- *         name:
+ *       - name: reportId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           example: "Texnika"
- *         description:
+ *     responses:
+ *       200:
+ *         description: Hesabat təfərrüatları uğurla gətirildi
+ *       404:
+ *         description: Hesabat tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/reports/:reportId', protect, getReportDetails);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/reports/{reportId}:
+ *   delete:
+ *     summary: Hesabatı sil
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           example: "Texniki avadanlıqlar"
- *         amortizationRate:
- *           type: number
- *           example: 15
- *         isActive:
- *           type: boolean
- *           default: true
- *         createdAt:
+ *       - name: reportId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           format: date-time
- *
- *     CategoryInput:
- *       type: object
- *       required:
- *         - name
- *       properties:
- *         name:
+ *     responses:
+ *       200:
+ *         description: Hesabat uğurla silindi
+ *       404:
+ *         description: Hesabat tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.delete('/:userId/assets/reports/:reportId', protect, deleteReport);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/reports/cleanup:
+ *   post:
+ *     summary: Köhnə hesabatları təmizlə
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
  *           type: string
- *           example: "Texnika"
- *         description:
- *           type: string
- *           example: "Texniki avadanlıqlar"
- *         amortizationRate:
- *           type: number
- *           example: 15
- *
- *     Error:
- *       type: object
- *       properties:
- *         success:
- *           type: boolean
- *           example: false
- *         error:
- *           type: string
- *           example: "ValidationError"
- *         message:
- *           type: string
- *           example: "Validation failed"
- *
- *     SuccessResponse:
- *       type: object
- *       properties:
- *         success:
- *           type: boolean
- *           example: true
- *         message:
- *           type: string
- *           example: "Operation completed successfully"
- *
- *   parameters:
- *     userIdParam:
- *       in: path
- *       name: userId
- *       required: true
- *       schema:
- *         type: string
- *       description: İstifadəçi ID-si
- *       example: "507f1f77bcf86cd799439011"
- *
- *     assetIdParam:
- *       in: path
- *       name: assetId
- *       required: true
- *       schema:
- *         type: string
- *       description: Vəsait ID-si
- *       example: "507f1f77bcf86cd799439022"
- *
- *     categoryIdParam:
- *       in: path
- *       name: categoryId
- *       required: true
- *       schema:
- *         type: string
- *       description: Kateqoriya ID-si
- *       example: "507f1f77bcf86cd799439033"
- *
- *     categoryQueryParam:
- *       in: query
- *       name: category
+ *     requestBody:
  *       required: false
- *       schema:
- *         type: string
- *       description: Kateqoriya üzrə filter
- *
- *     locationQueryParam:
- *       in: query
- *       name: location
- *       required: false
- *       schema:
- *         type: string
- *       description: Yer üzrə filter
- *
- *     statusQueryParam:
- *       in: query
- *       name: status
- *       required: false
- *       schema:
- *         type: string
- *       description: Status üzrə filter
- *
- *   responses:
- *     NotFound:
- *       description: Məlumat tapılmadı
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Error'
- *             example:
- *               success: false
- *               error: "NotFound"
- *               message: "Məlumat tapılmadı"
- *
- *     ValidationError:
- *       description: Validasiya xətası
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Error'
- *             example:
- *               success: false
- *               error: "ValidationError"
- *               message: "Zorunlu alanlar doldurulmalıdır"
- *
- *     ServerError:
- *       description: Server xətası
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Error'
- *             example:
- *               success: false
- *               error: "ServerError"
- *               message: "Server xətası baş verdi"
- *
- *     Success:
- *       description: Əməliyyat uğurla tamamlandı
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SuccessResponse'
- *
- *     AssetListResponse:
- *       description: Vəsaitlər siyahısı
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               success:
- *                 type: boolean
- *                 example: true
- *               data:
- *                 type: array
- *                 items:
- *                   $ref: '#/components/schemas/Asset'
- *               count:
+ *               days:
+ *                 type: integer
+ *                 default: 90
+ *                 description: Neçə gündən köhnə hesabatlar silinsin
+ *     responses:
+ *       200:
+ *         description: Köhnə hesabatlar uğurla təmizləndi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.post('/:userId/assets/reports/cleanup', protect, cleanupOldReports);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories:
+ *   get:
+ *     summary: Bütün kateqoriyaları gətir
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriyalar uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories', protect, getCategories);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/default:
+ *   post:
+ *     summary: Default kateqoriyaları yüklə
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Default kateqoriyalar uğurla yükləndi
+ *       400:
+ *         description: İstifadəçinin artıq kateqoriyaları var
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.post('/:userId/categories/default', protect, loadDefaultCategories);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories:
+ *   post:
+ *     summary: Yeni kateqoriya yarat
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Kateqoriya adı
+ *               description:
+ *                 type: string
+ *                 description: Təsvir
+ *               amortizationRate:
  *                 type: number
- *                 example: 5
- *
- *     AssetResponse:
- *       description: Tək vəsait məlumatı
+ *                 description: Amortizasiya dərəcəsi
+ *               colorCode:
+ *                 type: string
+ *                 description: Rəng kodu
+ *               icon:
+ *                 type: string
+ *                 description: İkon
+ *     responses:
+ *       201:
+ *         description: Kateqoriya uğurla yaradıldı
+ *       400:
+ *         description: Kateqoriya adı artıq mövcuddur
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.post('/:userId/categories', protect, createCategory);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/{categoryId}:
+ *   get:
+ *     summary: Kateqoriya təfərrüatlarını gətir
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: categoryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriya təfərrüatları uğurla gətirildi
+ *       404:
+ *         description: Kateqoriya tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/:categoryId', protect, getCategoryDetails);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/{categoryId}:
+ *   put:
+ *     summary: Kateqoriyanı yenilə
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: categoryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               success:
- *                 type: boolean
- *                 example: true
- *               data:
- *                 $ref: '#/components/schemas/Asset'
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               amortizationRate:
+ *                 type: number
+ *               colorCode:
+ *                 type: string
+ *               icon:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriya uğurla yeniləndi
+ *       400:
+ *         description: Kateqoriya adı artıq mövcuddur
+ *       404:
+ *         description: Kateqoriya tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
  */
-
-// ==================== VƏSAİT ƏMƏLİYYATLARI ====================
+router.put('/:userId/categories/:categoryId', protect, updateCategory);
 
 /**
  * @swagger
- * /api/{userId}/assets:
+ * /api/users/{userId}/categories/{categoryId}:
+ *   delete:
+ *     summary: Kateqoriyanı sil
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: categoryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriya uğurla silindi
+ *       400:
+ *         description: Bu kateqoriyaya aid vəsaitlər var
+ *       404:
+ *         description: Kateqoriya tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.delete('/:userId/categories/:categoryId', protect, deleteCategory);
+
+// ===================== ŞÖBƏ STATİSTİKALARI =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/departments/values:
+ *   get:
+ *     summary: Şöbələr üzrə dəyərləri gətir (ətraflı)
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Şöbə dəyərləri uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/departments/values', protect, getDepartmentValues);
+
+/**
+ * @swagger
+ * /api/users/{userId}/departments/values/simple:
+ *   get:
+ *     summary: Şöbələr üzrə dəyərləri gətir (sadə)
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Şöbə dəyərləri uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/departments/values/simple', protect, getSimpleDepartmentValues);
+
+// ===================== VƏSAİT ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets:
  *   get:
  *     summary: İstifadəçinin bütün vəsaitlərini gətir
  *     tags: [Assets]
@@ -400,451 +553,81 @@ const router = express.Router();
  *       - category: Kateqoriya üzrə filtr
  *       - location: Yer üzrə filtr
  *       - status: Status üzrə filtr
+ *       - department: Şöbə üzrə filtr
+ *       - responsiblePerson: Məsul şəxs üzrə filtr
+ *       - isInsured: Sığorta olub-olmadığı
+ *       - page: Səhifə nömrəsi (default: 1)
+ *       - limit: Hər səhifədəki element sayı (default: 20)
+ *       - sortBy: Sıralama sahəsi (default: createdAt)
+ *       - sortOrder: Sıralama istiqaməti (asc/desc, default: desc)
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/categoryQueryParam'
- *       - $ref: '#/components/parameters/locationQueryParam'
- *       - $ref: '#/components/parameters/statusQueryParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: İstifadəçi ID-si
+ *       - name: category
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Kateqoriya üzrə filtr
+ *       - name: location
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Yer üzrə filtr
+ *       - name: status
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Status üzrə filtr (Aktiv, Passiv, Satılıb, Sıradan çıxıb, Təmir üçün, İcarədə)
+ *       - name: department
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Şöbə üzrə filtr
+ *       - name: responsiblePerson
+ *         in: query
+ *         schema:
+ *           type: string
+ *         description: Məsul şəxs üzrə filtr
+ *       - name: isInsured
+ *         in: query
+ *         schema:
+ *           type: boolean
+ *         description: Sığorta olub-olmadığı
+ *       - name: page
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Səhifə nömrəsi
+ *       - name: limit
+ *         in: query
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Hər səhifədəki element sayı
+ *       - name: sortBy
+ *         in: query
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *           enum: [createdAt, updatedAt, name, initialValue, currentValue, purchaseDate]
+ *         description: Sıralama sahəsi
+ *       - name: sortOrder
+ *         in: query
+ *         schema:
+ *           type: string
+ *           default: desc
+ *           enum: [asc, desc]
+ *         description: Sıralama istiqaməti
  *     responses:
  *       200:
- *         $ref: '#/components/responses/AssetListResponse'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/assets", protect, getAllAssets);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}:
- *   get:
- *     summary: ID ilə vəsaiti gətir
- *     tags: [Assets]
- *     description: Müəyyən edilmiş ID-yə sahib vəsaiti gətirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     responses:
- *       200:
- *         $ref: '#/components/responses/AssetResponse'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/assets/:assetId", protect, getAssetById);
-
-/**
- * @swagger
- * /api/{userId}/assets:
- *   post:
- *     summary: Yeni vəsait yarat
- *     tags: [Assets]
- *     description: |
- *       Yeni vəsait yaradır. Əgər sənəd yükləmək istəyirsinizsə,
- *       form-data formatında göndərin və 'document' sahəsini istifadə edin.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               inventoryNumber:
- *                 type: string
- *                 example: "INV-001"
- *               name:
- *                 type: string
- *                 required: true
- *                 example: "Dizüstü Kompüter"
- *               category:
- *                 type: string
- *                 required: true
- *                 example: "Texnika"
- *               account:
- *                 type: string
- *                 required: true
- *                 example: "543"
- *               location:
- *                 type: string
- *                 required: true
- *                 example: "Baş Ofis"
- *               initialValue:
- *                 type: number
- *                 required: true
- *                 example: 2500
- *               currentValue:
- *                 type: number
- *                 required: true
- *                 example: 2000
- *               purchaseDate:
- *                 type: string
- *                 format: date
- *                 required: true
- *                 example: "2024-01-15"
- *               serviceLife:
- *                 type: number
- *                 example: 5
- *               notes:
- *                 type: string
- *                 example: "Test üçün yaradılıb"
- *               document:
- *                 type: string
- *                 format: binary
- *                 description: Fayl yükləmək üçün (PDF, Excel, Şəkil, Word)
- *     responses:
- *       201:
- *         description: Vəsait uğurla yaradıldı
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Asset'
- *                 message:
- *                   type: string
- *                   example: "Vəsait uğurla əlavə edildi"
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.post(
-  "/:userId/assets",
-  uploadDocuments.single("document"),
-  protect,
-  createAsset
-);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}:
- *   put:
- *     summary: Vəsaiti yenilə
- *     tags: [Assets]
- *     description: Mövcud vəsaiti yeniləyir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Yenilənmiş Dizüstü"
- *               category:
- *                 type: string
- *                 example: "Texnika"
- *               account:
- *                 type: string
- *                 example: "543"
- *               location:
- *                 type: string
- *                 example: "Baş Ofis"
- *               initialValue:
- *                 type: number
- *                 example: 2500
- *               currentValue:
- *                 type: number
- *                 example: 1800
- *               status:
- *                 type: string
- *                 enum: [Aktiv, Passiv, Satılıb, Sıradan çıxıb]
- *                 example: "Aktiv"
- *               purchaseDate:
- *                 type: string
- *                 format: date
- *                 example: "2024-01-15"
- *               notes:
- *                 type: string
- *                 example: "Yeniləndi"
- *               document:
- *                 type: string
- *                 format: binary
- *                 description: Yeni sənəd yükləmək üçün
- *     responses:
- *       200:
- *         description: Vəsait uğurla yeniləndi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Asset'
- *                 message:
- *                   type: string
- *                   example: "Vəsait uğurla yeniləndi"
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.put(
-  "/:userId/assets/:assetId",
-  uploadDocuments.single("document"),
-  protect,
-  updateAsset
-);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}:
- *   delete:
- *     summary: Vəsaiti sil
- *     tags: [Assets]
- *     description: Vəsaiti sistemdən silir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     responses:
- *       200:
- *         $ref: '#/components/responses/Success'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.delete("/:userId/assets/:assetId", protect, deleteAsset);
-
-// ==================== SƏNƏD ƏMƏLİYYATLARI ====================
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}/document:
- *   get:
- *     summary: Vəsait sənəd məlumatlarını gətir
- *     tags: [Documents]
- *     description: Upload olunmuş sənədin metadata məlumatlarını qaytarır
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     responses:
- *       200:
- *         description: Sənəd məlumatları uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     assetId:
- *                       type: string
- *                     assetName:
- *                       type: string
- *                     document:
- *                       type: object
- *                       properties:
- *                         originalName:
- *                           type: string
- *                         mimeType:
- *                           type: string
- *                         fileSize:
- *                           type: number
- *                         uploadedAt:
- *                           type: string
- *                           format: date-time
- *                         downloadUrl:
- *                           type: string
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         description: Sənəd tapılmadı
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/assets/:assetId/document", protect, getAssetDocument);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}/upload-document:
- *   post:
- *     summary: Vəsaitə sənəd yüklə
- *     tags: [Documents]
- *     description: Vəsaitə yeni sənəd yükləyir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               document:
- *                 type: string
- *                 format: binary
- *                 description: PDF, Excel, Şəkil, Word faylı (max 10MB)
- *     responses:
- *       200:
- *         description: Sənəd uğurla yükləndi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Sənəd uğurla yükləndi"
- *                 data:
- *                   type: object
- *                   properties:
- *                     document:
- *                       type: object
- *                       properties:
- *                         originalName:
- *                           type: string
- *                         mimeType:
- *                           type: string
- *                         fileSize:
- *                           type: number
- *                         uploadedAt:
- *                           type: string
- *                           format: date-time
- *       400:
- *         description: Fayl seçilməyib və ya etibarsız
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.post(
-  "/:userId/assets/:assetId/upload-document",
-  uploadDocuments.single("document"),
-  protect,
-  uploadAssetDocument
-);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}/download-document:
- *   get:
- *     summary: Vəsait sənədini yüklə
- *     tags: [Documents]
- *     description: Vəsaitin sənədini endirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     responses:
- *       200:
- *         description: Fayl uğurla yükləndi
- *         content:
- *           application/octet-stream:
- *             schema:
- *               type: string
- *               format: binary
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get(
-  "/:userId/assets/:assetId/download-document",
-  protect,
-  downloadAssetDocument
-);
-
-/**
- * @swagger
- * /api/{userId}/assets/{assetId}/documents:
- *   delete:
- *     summary: Vəsait sənədini sil
- *     tags: [Documents]
- *     description: Vəsaitdən sənədi silir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/assetIdParam'
- *     responses:
- *       200:
- *         $ref: '#/components/responses/Success'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.delete(
-  "/:userId/assets/:assetId/documents",
-  protect,
-  deleteAssetDocument
-);
-
-// ==================== KATEQORİYA ƏMƏLİYYATLARI ====================
-
-/**
- * @swagger
- * /api/{userId}/categories:
- *   get:
- *     summary: Bütün kateqoriyaları gətir
- *     tags: [Categories]
- *     description: İstifadəçinin bütün kateqoriyalarını gətirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     responses:
- *       200:
- *         description: Kateqoriyalar uğurla gətirildi
+ *         description: Vəsaitlər siyahısı uğurla gətirildi
  *         content:
  *           application/json:
  *             schema:
@@ -855,311 +638,629 @@ router.delete(
  *                 data:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Category'
- *                 count:
- *                   type: number
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/categories", protect, getCategories);
-
-/**
- * @swagger
- * /api/{userId}/categories:
- *   post:
- *     summary: Yeni kateqoriya yarat
- *     tags: [Categories]
- *     description: Yeni kateqoriya yaradır
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CategoryInput'
- *     responses:
- *       201:
- *         description: Kateqoriya uğurla yaradıldı
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Category'
- *                 message:
- *                   type: string
- *                   example: "Kateqoriya uğurla əlavə edildi"
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         description: Yetkisiz giriş
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.post("/:userId/categories", protect, createCategory);
-
-/**
- * @swagger
- * /api/{userId}/categories/{categoryId}:
- *   put:
- *     summary: Kateqoriyanı yenilə
- *     tags: [Categories]
- *     description: Mövcud kateqoriyanı yeniləyir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/categoryIdParam'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CategoryInput'
- *     responses:
- *       200:
- *         description: Kateqoriya uğurla yeniləndi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Category'
- *                 message:
- *                   type: string
- *                   example: "Kateqoriya uğurla yeniləndi"
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.put("/:userId/categories/:categoryId", protect, updateCategory);
-
-/**
- * @swagger
- * /api/{userId}/categories/{categoryId}:
- *   delete:
- *     summary: Kateqoriyanı sil
- *     tags: [Categories]
- *     description: Kateqoriyanı sistemdən silir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *       - $ref: '#/components/parameters/categoryIdParam'
- *     responses:
- *       200:
- *         $ref: '#/components/responses/Success'
- *       400:
- *         description: Bu kateqoriyaya aid vəsaitlər var
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.delete("/:userId/categories/:categoryId", protect, deleteCategory);
-
-// ==================== HESABAT ƏMƏLİYYATLARI ====================
-
-/**
- * @swagger
- * /api/{userId}/reports:
- *   get:
- *     summary: Bütün hesabatları gətir
- *     tags: [Reports]
- *     description: İstifadəçinin bütün hesabatlarını gətirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     responses:
- *       200:
- *         description: Hesabatlar uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
+ *                     $ref: '#/components/schemas/Asset'
+ *                 pagination:
  *                   type: object
  *                   properties:
- *                     excelReports:
- *                       type: array
- *                     pdfReports:
- *                       type: array
- *                     categoryReports:
- *                       type: array
- *                     departmentReports:
- *                       type: array
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/reports", getReports);
-
-/**
- * @swagger
- * /api/{userId}/statistics:
- *   get:
- *     summary: Vəsait statistikalarını gətir
- *     tags: [Reports]
- *     description: Vəsaitlər üzrə statistik məlumatları gətirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     responses:
- *       200:
- *         description: Statistikalar uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                 stats:
  *                   type: object
  *                   properties:
  *                     totalAssets:
- *                       type: number
+ *                       type: integer
  *                     totalInitialValue:
  *                       type: number
  *                     totalCurrentValue:
  *                       type: number
  *                     totalAmortization:
  *                       type: number
+ *                     activeAssets:
+ *                       type: integer
  *       401:
  *         description: Yetkisiz giriş
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         description: Vəsaitlər tapılmadı
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/statistics", protect, getAssetStatistics);
+router.get('/:userId/assets', protect, getAllAssets);
 
 /**
  * @swagger
- * /api/{userId}/departments:
+ * /api/users/{userId}/assets/stats:
  *   get:
- *     summary: Şöbə dəyərlərini gətir
- *     tags: [Reports]
- *     description: Şöbələr üzrə vəsait dəyərlərini gətirir
+ *     summary: İstifadəçinin vəsait statistikalarını gətir
+ *     tags: [Assets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Şöbə dəyərləri uğurla gətirildi
+ *         description: Statistika məlumatları uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/stats', protect, getAssetStats);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/statistics:
+ *   get:
+ *     summary: Ətraflı vəsait statistikalarını gətir
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Ətraflı statistika məlumatları uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/statistics', protect, getAssetStatistics);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/statistics/simple:
+ *   get:
+ *     summary: Sadə vəsait statistikalarını gətir
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sadə statistika məlumatları uğurla gətirildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/statistics/simple', protect, getSimpleAssetStatistics);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/search:
+ *   get:
+ *     summary: Vəsaitlərdə axtarış
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: q
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Axtarış termini
+ *       - name: field
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [all, name, inventoryNumber, category, location, serialNumber, account, department, responsiblePerson, notes]
+ *           default: all
+ *         description: Axtarış sahəsi
+ *     responses:
+ *       200:
+ *         description: Axtarış nəticələri
+ *       400:
+ *         description: Axtarış termini tələb olunur
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/search', protect, searchAssets);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets:
+ *   post:
+ *     summary: Yeni vəsait yarat (fayl ilə)
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - category
+ *               - account
+ *               - location
+ *               - initialValue
+ *               - currentValue
+ *               - purchaseDate
+ *             properties:
+ *               inventoryNumber:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               category:
+ *                 type: string
+ *               account:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               initialValue:
+ *                 type: number
+ *               currentValue:
+ *                 type: number
+ *               purchaseDate:
+ *                 type: string
+ *                 format: date
+ *               serviceLife:
+ *                 type: integer
+ *               notes:
+ *                 type: string
+ *               depreciationMethod:
+ *                 type: string
+ *                 enum: [Düz xətt, Azalan qalıq, İstehsal həcmi, İkiqat azalan, İllər cəmi]
+ *               warrantyExpiryDate:
+ *                 type: string
+ *                 format: date
+ *               nextMaintenanceDate:
+ *                 type: string
+ *                 format: date
+ *               supplier:
+ *                 type: string
+ *               serialNumber:
+ *                 type: string
+ *               barcode:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               responsiblePerson:
+ *                 type: string
+ *               isInsured:
+ *                 type: boolean
+ *               insuranceExpiryDate:
+ *                 type: string
+ *                 format: date
+ *               tags:
+ *                 type: string
+ *               document:
+ *                 type: file
+ *                 description: Sənəd faylı
+ *     responses:
+ *       201:
+ *         description: Vəsait uğurla yaradıldı
+ *       400:
+ *         description: Yanlış məlumat göndərildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       413:
+ *         description: Fayl həcmi çox böyükdür
+ *       415:
+ *         description: Desteklenmeyen dosya türü
+ *       500:
+ *         description: Server xətası
+ */
+router.post(
+  '/:userId/assets', 
+  protect, 
+  uploadDocuments.single('document'), 
+  createAsset
+);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}:
+ *   get:
+ *     summary: ID ilə vəsaiti gətir
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Vəsait məlumatları uğurla gətirildi
+ *       404:
+ *         description: Vəsait tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/:assetId', protect, getAssetById);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}:
+ *   put:
+ *     summary: Vəsaiti yenilə (fayl ilə)
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               category:
+ *                 type: string
+ *               account:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               initialValue:
+ *                 type: number
+ *               currentValue:
+ *                 type: number
+ *               status:
+ *                 type: string
+ *                 enum: [Aktiv, Passiv, Satılıb, Sıradan çıxıb, Təmir üçün, İcarədə]
+ *               purchaseDate:
+ *                 type: string
+ *                 format: date
+ *               serviceLife:
+ *                 type: integer
+ *               notes:
+ *                 type: string
+ *               depreciationMethod:
+ *                 type: string
+ *                 enum: [Düz xətt, Azalan qalıq, İstehsal həcmi, İkiqat azalan, İllər cəmi]
+ *               warrantyExpiryDate:
+ *                 type: string
+ *                 format: date
+ *               nextMaintenanceDate:
+ *                 type: string
+ *                 format: date
+ *               supplier:
+ *                 type: string
+ *               serialNumber:
+ *                 type: string
+ *               barcode:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               responsiblePerson:
+ *                 type: string
+ *               isInsured:
+ *                 type: boolean
+ *               insuranceExpiryDate:
+ *                 type: string
+ *                 format: date
+ *               tags:
+ *                 type: string
+ *               document:
+ *                 type: file
+ *                 description: Yeni sənəd faylı
+ *     responses:
+ *       200:
+ *         description: Vəsait uğurla yeniləndi
+ *       404:
+ *         description: Vəsait tapılmadı
+ *       400:
+ *         description: Yanlış məlumat göndərildi
+ *       413:
+ *         description: Fayl həcmi çox böyükdür
+ *       415:
+ *         description: Desteklenmeyen dosya türü
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.put(
+  '/:userId/assets/:assetId', 
+  protect, 
+  uploadDocuments.single('document'), 
+  updateAsset
+);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}:
+ *   delete:
+ *     summary: Vəsaiti sil
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Vəsait uğurla silindi
+ *       404:
+ *         description: Vəsait tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.delete('/:userId/assets/:assetId', protect, deleteAsset);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}/status:
+ *   put:
+ *     summary: Vəsait statusunu yenilə
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Aktiv, Passiv, Satılıb, Sıradan çıxıb, Təmir üçün, İcarədə]
+ *     responses:
+ *       200:
+ *         description: Status uğurla yeniləndi
+ *       400:
+ *         description: Status tələb olunur
+ *       404:
+ *         description: Vəsait tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.put('/:userId/assets/:assetId/status', protect, updateAssetStatus);
+
+// ===================== SƏNƏD ƏMƏLİYYATLARI =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}/document:
+ *   get:
+ *     summary: Vəsait sənəd məlumatlarını gətir
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sənəd məlumatları uğurla gətirildi
+ *       404:
+ *         description: Vəsait və ya sənəd tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/:assetId/document', protect, getAssetDocument);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}/document:
+ *   put:
+ *     summary: Vəsaitə sənəd yüklə
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: document
+ *         in: formData
+ *         type: file
+ *         required: true
+ *         description: Yüklənəcək sənəd faylı
+ *     responses:
+ *       200:
+ *         description: Sənəd uğurla yükləndi
+ *       400:
+ *         description: Fayl seçilməyib
+ *       404:
+ *         description: Vəsait tapılmadı
+ *       413:
+ *         description: Fayl həcmi çox böyükdür
+ *       415:
+ *         description: Desteklenmeyen dosya türü
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.put(
+  '/:userId/assets/:assetId/document', 
+  protect, 
+  uploadDocuments.single('document'), 
+  uploadAssetDocument
+);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}/document:
+ *   delete:
+ *     summary: Vəsait sənədini sil
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sənəd uğurla silindi
+ *       404:
+ *         description: Sənəd tapılmadı
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.delete('/:userId/assets/:assetId/document', protect, deleteAssetDocument);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/{assetId}/download-document:
+ *   get:
+ *     summary: Vəsait sənədini yüklə (download)
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: assetId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sənəd uğurla göndərildi
  *         content:
- *           application/json:
+ *           application/octet-stream:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       location:
- *                         type: string
- *                       assetCount:
- *                         type: number
- *                       initialValue:
- *                         type: number
- *                       currentValue:
- *                         type: number
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Sənəd tapılmadı
  *       401:
  *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/departments", protect, getDepartmentValues);
+router.get('/:userId/assets/:assetId/download-document', protect, downloadAssetDocument);
+
+// ===================== EXPORT ƏMƏLİYYATLARI =====================
 
 /**
  * @swagger
- * /api/{userId}/previous-reports:
+ * /api/users/{userId}/assets/export/excel:
  *   get:
- *     summary: Əvvəlki hesabatları gətir
- *     tags: [Reports]
- *     description: Əvvəl yaradılmış hesabatları gətirir
+ *     summary: Bütün vəsaitləri Excel formatında yüklə (TAM VERSİYA)
+ *     tags: [Exports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Əvvəlki hesabatlar uğurla gətirildi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     excelReports:
- *                       type: array
- *                     pdfReports:
- *                       type: array
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get("/:userId/previous-reports", protect, getPreviousReports);
-
-// ==================== EXPORT ƏMƏLİYYATLARI ====================
-
-/**
- * @swagger
- * /api/{userId}/assets/export/excel:
- *   get:
- *     summary: Bütün vəsaitləri Excel formatında endir
- *     tags: [Export]
- *     description: Bütün vəsait məlumatlarını Excel faylı kimi endirir
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     responses:
- *       200:
- *         description: Excel faylı uğurla yaradıldı
+ *         description: Excel faylı uğurla göndərildi
  *         content:
  *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
  *             schema:
@@ -1167,91 +1268,52 @@ router.get("/:userId/previous-reports", protect, getPreviousReports);
  *               format: binary
  *       401:
  *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/assets/export/excel", protect, downloadAllAssetsExcel);
+router.get('/:userId/assets/export/excel', protect, downloadAllAssetsExcel);
 
 /**
  * @swagger
- * /api/{userId}/assets/export/pdf:
+ * /api/users/{userId}/assets/export/excel-simple:
  *   get:
- *     summary: Amortizasiya hesabatını PDF formatında endir
- *     tags: [Export]
- *     description: Amortizasiya hesabatını PDF faylı kimi endirir
+ *     summary: Vəsaitləri Excel formatında yüklə (BASIT)
+ *     tags: [Exports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: PDF faylı uğurla yaradıldı
- *         content:
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
+ *         description: Excel faylı uğurla göndərildi
  *       401:
  *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get(
-  "/:userId/assets/export/pdf",
-  protect,
-  downloadAmortizationReportPDF
-);
+router.get('/:userId/assets/export/excel-simple', protect, exportAssetsToExcel);
 
 /**
  * @swagger
- * /api/{userId}/assets/export/pdf-formatted:
+ * /api/users/{userId}/assets/export/generate-excel:
  *   get:
- *     summary: Formatlı amortizasiya hesabatını PDF formatında endir
- *     tags: [Export]
- *     description: Daha gözəl dizayna sahib amortizasiya hesabatını PDF faylı kimi endirir
+ *     summary: Aktiv vəsaitləri Excel formatında yüklə (Database report ilə)
+ *     tags: [Exports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Formatlı PDF faylı uğurla yaradıldı
- *         content:
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
- *       401:
- *         description: Yetkisiz giriş
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get(
-  "/:userId/assets/export/pdf-formatted",
-  protect,
-  downloadFormattedAmortizationPDF
-);
-
-/**
- * @swagger
- * /api/{userId}/assets/test-simple-excel:
- *   get:
- *     summary: Sadə test Excel faylı yarad
- *     tags: [Export]
- *     description: Test məqsədli sadə Excel faylı yaradır
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
- *     responses:
- *       200:
- *         description: Test Excel faylı uğurla yaradıldı
+ *         description: Excel faylı uğurla göndərildi və database-ə qeyd edildi
  *         content:
  *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
  *             schema:
@@ -1260,24 +1322,152 @@ router.get(
  *       401:
  *         description: Yetkisiz giriş
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/assets/test-simple-excel", protect, testSimpleExcel);
+router.get('/:userId/assets/export/generate-excel', protect, generateAndDownloadExcel);
 
 /**
  * @swagger
- * /api/{userId}/assets/test-pdf:
+ * /api/users/{userId}/assets/export/category-excel:
  *   get:
- *     summary: Sadə test PDF faylı yarad
- *     tags: [Export]
- *     description: Test məqsədli sadə PDF faylı yaradır
+ *     summary: Kateqoriya üzrə Excel hesabatını yüklə
+ *     tags: [Exports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Test PDF faylı uğurla yaradıldı
+ *         description: Kateqoriya Excel faylı uğurla göndərildi
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/category-excel', protect, downloadCategoryExcel);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/search-results-excel:
+ *   get:
+ *     summary: Axtarış nəticələrini Excel formatında yüklə
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: q
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Axtarış termini
+ *       - name: field
+ *         in: query
+ *         schema:
+ *           type: string
+ *           enum: [all, name, inventoryNumber, category, location, serialNumber]
+ *           default: all
+ *         description: Axtarış sahəsi
+ *     responses:
+ *       200:
+ *         description: Axtarış nəticələri Excel faylı uğurla göndərildi
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Axtarış termini tələb olunur
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/search-results-excel', protect, exportSearchResultsToExcel);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/csv:
+ *   get:
+ *     summary: Vəsaitləri CSV formatında yüklə
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV faylı uğurla göndərildi
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/csv', protect, downloadAssetsCSV);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/test-excel:
+ *   get:
+ *     summary: Test Excel faylı yarat
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Test Excel faylı uğurla göndərildi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/test-excel', protect, testSimpleExcel);
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/generate-pdf:
+ *   get:
+ *     summary: Aktiv vəsaitləri PDF formatında yüklə
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PDF faylı uğurla göndərildi
  *         content:
  *           application/pdf:
  *             schema:
@@ -1286,34 +1476,124 @@ router.get("/:userId/assets/test-simple-excel", protect, testSimpleExcel);
  *       401:
  *         description: Yetkisiz giriş
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/assets/test-pdf", protect, testSimplePDF);
+router.get('/:userId/assets/export/generate-pdf', protect, generateAndDownloadPdf);
 
 /**
  * @swagger
- * /api/{userId}/assets/export-page:
+ * /api/users/{userId}/assets/export/amortization-pdf:
  *   get:
- *     summary: Export test səhifəsini gətir
- *     tags: [Export]
- *     description: Export test səhifəsini HTML formatında gətirir
+ *     summary: Amortizasiya hesabatını PDF formatında yüklə
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/userIdParam'
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Export test səhifəsi
+ *         description: Amortizasiya PDF faylı uğurla göndərildi
  *         content:
- *           text/html:
+ *           application/pdf:
  *             schema:
  *               type: string
- *       404:
- *         $ref: '#/components/responses/NotFound'
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server xətası
  */
-router.get("/:userId/assets/export-page", protect, getAssetsExportPage);
+router.get('/:userId/assets/export/amortization-pdf', protect, downloadAmortizationReportPDF);
 
-// Upload error handling middleware
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/formatted-amortization-pdf:
+ *   get:
+ *     summary: Formatlı amortizasiya hesabatını PDF formatında yüklə
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Formatlı amortizasiya PDF faylı uğurla göndərildi
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/formatted-amortization-pdf', protect, downloadFormattedAmortizationPDF);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export/test-pdf:
+ *   get:
+ *     summary: Test PDF faylı yarat
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Test PDF faylı uğurla göndərildi
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export/test-pdf', protect, testSimplePDF);
+
+/**
+ * @swagger
+ * /api/users/{userId}/assets/export-page:
+ *   get:
+ *     summary: Export test səhifəsi (HTML)
+ *     tags: [Exports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: HTML export səhifəsi
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/assets/export-page', protect, getAssetsExportPage);
+
+
+
+// Fayl yükləmə xətası handler
 router.use(handleUploadError);
 
 export default router;
