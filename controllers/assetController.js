@@ -1272,10 +1272,11 @@ export const getAssetDocument = async (req, res) => {
     console.log('🔍 GET ASSET DOCUMENT called');
     const { userId, assetId } = req.params;
 
+    // ⭐ bufferData sahəsini də gətirmək üçün select istifadə et
     const asset = await Asset.findOne({ 
       _id: assetId, 
       userId 
-    });
+    }).select('+document.bufferData'); // ⭐ BU ƏLAVƏ EDİLDİ
 
     if (!asset) {
       return res.status(404).json({ 
@@ -1285,6 +1286,13 @@ export const getAssetDocument = async (req, res) => {
     }
 
     console.log('📄 Asset document exists:', !!asset.document);
+    console.log('📦 Document structure:', asset.document ? {
+      keys: Object.keys(asset.document),
+      hasBufferData: !!asset.document.bufferData,
+      bufferDataLength: asset.document.bufferData ? asset.document.bufferData.length : 0,
+      mimeType: asset.document.mimeType,
+      originalName: asset.document.originalName
+    } : 'No document');
     
     if (!asset.document) {
       return res.status(404).json({ 
@@ -1298,31 +1306,42 @@ export const getAssetDocument = async (req, res) => {
       });
     }
 
-    const documentInfo = {
-      originalName: asset.document.originalName,
-      mimeType: asset.document.mimeType,
-      fileSize: asset.document.fileSize,
-      uploadedAt: asset.document.uploadedAt,
-      downloadUrl: `/api/${userId}/assets/${assetId}/download-document`,
-      directFileUrl: `/api/${userId}/assets/${assetId}/download-document?download=true`
-    };
+    // bufferData yoxdursa error ver
+    if (!asset.document.bufferData) {
+      console.error('❌ bufferData not found in document');
+      return res.status(500).json({
+        success: false,
+        message: "Fayl məlumatı tapılmadı",
+        documentKeys: Object.keys(asset.document)
+      });
+    }
 
-    res.json({
-      success: true,
-      message: "Sənəd məlumatları uğurla gətirildi",
-      data: {
-        assetId: asset._id,
-        assetName: asset.name,
-        document: documentInfo
-      }
-    });
+    // Content-Type təyin et
+    res.set('Content-Type', asset.document.mimeType || 'application/octet-stream');
+    
+    // Faylı attachment kimi göndər (avtomatik download)
+    res.set('Content-Disposition', `attachment; filename="${asset.document.originalName || 'document.pdf'}"`);
+    
+    // Base64 string'i Buffer-ə çevir və göndər
+    const fileBuffer = Buffer.from(asset.document.bufferData, 'base64');
+    console.log(`✅ Sending file: ${asset.document.originalName}, Size: ${fileBuffer.length} bytes`);
+    
+    return res.send(fileBuffer);
 
   } catch (error) {
     console.error('❌ GET ASSET DOCUMENT Error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: error.message
-    });
+    
+    // Əgər JSON istəyirsə, JSON qaytar
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.status(500).json({ 
+        success: false,
+        message: error.message,
+        errorType: error.constructor.name
+      });
+    }
+    
+    // Əks halda sadə error mesajı
+    res.status(500).send(`Server xətası: ${error.message}`);
   }
 };
 

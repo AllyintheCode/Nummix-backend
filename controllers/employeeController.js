@@ -53,13 +53,7 @@ export const createEmployee = async (req, res) => {
       });
     }
 
-    // Əgər gross varsa və 400-dən aşağıdırsa
-    if (employeeData.gross > 0 && employeeData.gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     // File upload varsa
     if (req.file) {
@@ -445,12 +439,7 @@ export const updateEmployee = async (req, res) => {
       updateData.fileSize = req.file.size;
     }
 
-    if (updateData.gross && updateData.gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
@@ -663,12 +652,7 @@ export const updateEmployeeTaxData = async (req, res) => {
   try {
     const { gross, employeeType } = req.body;
 
-    if (gross && gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const updateData = {};
     if (gross !== undefined) updateData.gross = gross;
@@ -705,12 +689,7 @@ export const calculateEmployeeTaxes = async (req, res) => {
   try {
     const { gross, employeeType } = req.body;
 
-    if (!gross || gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const taxResult = taxCalculationService.calculateAllTaxes(
       gross, 
@@ -736,12 +715,7 @@ export const updateSalary = async (req, res) => {
   try {
     const { gross, employeeType, salary_status } = req.body;
 
-    if (gross && gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const updateData = {};
     if (gross !== undefined) updateData.gross = gross;
@@ -2282,13 +2256,7 @@ export const bulkUpdateSalaries = async (req, res) => {
       try {
         const { employeeId, gross, employeeType } = update;
         
-        if (gross && gross < 400) {
-          errors.push({ 
-            employeeId, 
-            message: 'Əməkhaqqı 400 AZN-dən aşağı ola bilməz' 
-          });
-          continue;
-        }
+   
         
         const updateData = {};
         if (gross !== undefined) updateData.gross = gross;
