@@ -1,11 +1,13 @@
-import Customer from "../models/customersSchema.js";
 import Sale from "../models/salesSchema.js";
+import Supplier from "../models/suppliersSchema.js";
 
 export const getAllSales = async (req, res) => {
     try {
-        const sales = await Sale.find({ userId: req.user?._id, isActive: true }).sort({
-            createdAt: -1,
-        });
+        const sales = await Sale.find({ userId: req.user?._id, isActive: true })
+            .sort({
+                createdAt: -1,
+            })
+            .populate("supplierId");
 
         if (!sales || !sales.length) {
             return res.status(404).json({ message: "No sales records found." });
@@ -26,7 +28,9 @@ export const getSingleSale = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Sale ID must be provided." });
         }
-        const sale = await Sale.findOne({ _id: id, userId: req.user?._id, isActive: true });
+        const sale = await Sale.findOne({ _id: id, userId: req.user?._id, isActive: true }).populate(
+            "supplierId",
+        );
 
         if (!sale) {
             return res.status(404).json({ message: "Sale record not found." });
@@ -59,7 +63,7 @@ export const createSale = async (req, res) => {
             orderNumber,
             date,
             deliveryDate,
-            supplierId,
+            supplierId: supplier._id,
             amount,
             status,
             notes,
@@ -69,9 +73,10 @@ export const createSale = async (req, res) => {
 
         res.status(201).json({
             message: "Sale record created successfully",
-            data: savedSale,
+            data: { ...savedSale._doc, supplierId: supplier },
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };

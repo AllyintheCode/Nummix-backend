@@ -45,12 +45,6 @@ export const getSingleSupplier = async (req, res) => {
 
 export const createSupplier = async (req, res) => {
     try {
-        await Supplier.deleteOne({ _id: "6981d0a11fd3f61722659675" });
-
-        res.status(201).json({
-            message: "Supplier deleted successfully",
-        });
-
         const { companyName, taxId, contactPerson, phone, email, address } = req.body;
 
         if (!companyName || !taxId || !contactPerson || !phone || !email || !address) {
