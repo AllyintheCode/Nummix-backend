@@ -3,7 +3,7 @@ import Supplier from "../models/suppliersSchema.js";
 
 export const getAllOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ userId: req.user?._id }).sort({
+        const orders = await Order.find({ userId: req.user?._id, isActive: true }).sort({
             createdAt: -1,
         });
 
@@ -26,7 +26,7 @@ export const getSingleOrder = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -82,7 +82,7 @@ export const editOrder = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -120,7 +120,7 @@ export const changeOrderStatus = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
