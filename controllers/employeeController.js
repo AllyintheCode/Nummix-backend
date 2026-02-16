@@ -7,26 +7,68 @@ import excel from 'exceljs';
 
 
 // ✅ Yeni işçi yarat (AVTOMATİK VERGİ İLƏ)
+// ✅ CREATE EMPLOYEE - FormData qəbul edən versiya
 export const createEmployee = async (req, res) => {
   try {
-    const employeeData = req.body;
+    console.log('📨 CREATE EMPLOYEE REQUEST');
+    console.log('📝 Content-Type:', req.headers['content-type']);
+    console.log('📦 Request body fields:', Object.keys(req.body || {}));
     
-    // File upload varsa
-    if (req.file) {
-      employeeData.filename = req.file.originalname;
-      employeeData.contentType = req.file.mimetype;
-      employeeData.data = req.file.buffer;
-    }
+    // FormData'dan gələn məlumatları al
+    const employeeData = {
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      email: req.body.email,
+      position: req.body.position,
+      Department: req.body.Department,
+      gross: req.body.gross ? parseFloat(req.body.gross) : 0,
+      hireDate: req.body.hireDate || new Date(),
+      phone: req.body.phone,
+      tin: req.body.tin,
+      idSerialNumber: req.body.idSerialNumber,
+      employeeType: req.body.employeeType || 'private',
+      companyId: req.body.companyId || (req.user ? req.user._id : null)
+    };
 
-    // Əgər gross varsa, middleware avtomatik hesablayacaq
-    if (employeeData.gross && employeeData.gross < 400) {
+    console.log('💰 Gross dəyəri (frontend\'den):', employeeData.gross);
+    console.log('📊 Employee data:', employeeData);
+
+    // Validation - tələb olunan field'ları yoxla
+    if (!employeeData.firstName || !employeeData.lastName || !employeeData.email) {
       return res.status(400).json({ 
         success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
+        message: "Ad, soyad və email tələb olunur" 
       });
     }
 
+    // Email'un unique olub-olmadığını yoxla
+    const existingEmployee = await Employee.findOne({ 
+      email: employeeData.email.trim().toLowerCase()
+    });
+    
+    if (existingEmployee) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu email artıq istifadə olunur'
+      });
+    }
+
+
+
+    // File upload varsa
+    if (req.file) {
+      console.log('📎 Fayl yükləndi:', req.file.originalname);
+      employeeData.filename = req.file.fieldname || 'file';
+      employeeData.contentType = req.file.mimetype;
+      employeeData.data = req.file.buffer;
+      employeeData.fileSize = req.file.size;
+      employeeData.originalName = req.file.originalname;
+    }
+
+    // İşçi yarat (middleware avtomatik vergiləri hesablayacaq)
     const employee = await Employee.create(employeeData);
+    
+    console.log('✅ Employee yaradıldı:', employee._id);
     
     res.status(201).json({
       success: true,
@@ -36,14 +78,40 @@ export const createEmployee = async (req, res) => {
         : 'İşçi yaradıldı.'
     });
   } catch (error) {
+    console.error('❌ CREATE EMPLOYEE ERROR:', error);
+    
+    // Validation error
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: errors.join(', ')
+      });
+    }
+    
+    // Duplicate email error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu email artıq istifadə olunub'
+      });
+    }
+    
+    // Generic error
     res.status(500).json({ 
       success: false,
-      message: error.message 
+      message: error.message || 'İşçi yaradılarkən xəta baş verdi'
     });
   }
 };
+
+// ✅ UPLOAD FILE FOR EMPLOYEE - Təkmilləşdirilmiş
 export const uploadEmployeeFile = async (req, res) => {
   try {
+    console.log('📤 UPLOAD FILE REQUEST');
+    console.log('👤 Employee ID:', req.params.id);
+    console.log('📎 File info:', req.file ? req.file.originalname : 'No file');
+    
     // Fayl yoxlanışı
     if (!req.file) {
       return res.status(400).json({ 
@@ -52,23 +120,8 @@ export const uploadEmployeeFile = async (req, res) => {
       });
     }
 
-    // İşçini findByIdAndUpdate ilə yenilə (validasiyanı atlamaq üçün)
-    const employee = await Employee.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          filename: req.file.originalname,
-          contentType: req.file.mimetype,
-          data: req.file.buffer,
-          fileSize: req.file.size,
-          originalName: req.file.originalname
-        }
-      },
-      { 
-        new: true, // Yenilənmiş versiyanı qaytar
-        runValidators: false // Validasiyanı atla
-      }
-    );
+    // İşçini tap
+    const employee = await Employee.findById(req.params.id);
 
     if (!employee) {
       return res.status(404).json({ 
@@ -76,6 +129,17 @@ export const uploadEmployeeFile = async (req, res) => {
         message: "İşçi tapılmadı" 
       });
     }
+
+    // Fayl məlumatlarını yenilə
+    employee.filename = req.file.fieldname || 'file';
+    employee.contentType = req.file.mimetype;
+    employee.data = req.file.buffer;
+    employee.fileSize = req.file.size;
+    employee.originalName = req.file.originalname;
+
+    await employee.save();
+
+    console.log('✅ Fayl yükləndi:', req.file.originalname);
 
     res.json({
       success: true,
@@ -89,24 +153,43 @@ export const uploadEmployeeFile = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ UPLOAD FILE ERROR:', error);
     res.status(500).json({ 
       success: false,
-      message: error.message 
+      message: error.message || 'Fayl yüklənərkən xəta baş verdi'
     });
   }
 };
-// ✅ Bütün işçiləri getir
+
+// ✅ Bütün işçiləri getir - Təkmilləşdirilmiş
 export const getAllEmployees = async (req, res) => {
   try {
-    const { companyId, employeeType, department, salary_status } = req.query;
+    console.log('📋 GET ALL EMPLOYEES REQUEST');
+    
+    const { companyId, employeeType, department, salary_status, status } = req.query;
     let filter = {};
     
-    if (companyId) filter.companyId = companyId;
+    // Company filter
+    if (companyId) {
+      filter.companyId = companyId;
+    } else if (req.user && req.user._id) {
+      filter.companyId = req.user._id; // Default olaraq current user'ın companyId'si
+    }
+    
+    // Digər filter'lar
     if (employeeType) filter.employeeType = employeeType;
     if (department) filter.Department = department;
     if (salary_status) filter.salary_status = salary_status;
+    if (status) filter.status = status;
+    else filter.status = 'active'; // Default olaraq aktiv işçilər
 
-    const employees = await Employee.find(filter).select("-data");
+    console.log('🔍 Filter criteria:', filter);
+
+    const employees = await Employee.find(filter)
+      .select("-data") // Fayl məlumatlarını göndərmə
+      .sort({ createdAt: -1 });
+    
+    console.log('✅ Employees found:', employees.length);
     
     res.json({
       success: true,
@@ -114,12 +197,14 @@ export const getAllEmployees = async (req, res) => {
       count: employees.length
     });
   } catch (error) {
+    console.error('❌ GET ALL EMPLOYEES ERROR:', error);
     res.status(500).json({ 
       success: false,
       message: error.message 
     });
   }
 };
+
 
 // ✅ Fayl yüklə
 // controllers/employeeController.js - DÜZELTİLMİŞ VERSİYON
@@ -354,12 +439,7 @@ export const updateEmployee = async (req, res) => {
       updateData.fileSize = req.file.size;
     }
 
-    if (updateData.gross && updateData.gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
@@ -572,12 +652,7 @@ export const updateEmployeeTaxData = async (req, res) => {
   try {
     const { gross, employeeType } = req.body;
 
-    if (gross && gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const updateData = {};
     if (gross !== undefined) updateData.gross = gross;
@@ -614,12 +689,7 @@ export const calculateEmployeeTaxes = async (req, res) => {
   try {
     const { gross, employeeType } = req.body;
 
-    if (!gross || gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const taxResult = taxCalculationService.calculateAllTaxes(
       gross, 
@@ -645,12 +715,7 @@ export const updateSalary = async (req, res) => {
   try {
     const { gross, employeeType, salary_status } = req.body;
 
-    if (gross && gross < 400) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Əməkhaqqı 400 AZN-dən aşağı ola bilməz" 
-      });
-    }
+
 
     const updateData = {};
     if (gross !== undefined) updateData.gross = gross;
@@ -2191,13 +2256,7 @@ export const bulkUpdateSalaries = async (req, res) => {
       try {
         const { employeeId, gross, employeeType } = update;
         
-        if (gross && gross < 400) {
-          errors.push({ 
-            employeeId, 
-            message: 'Əməkhaqqı 400 AZN-dən aşağı ola bilməz' 
-          });
-          continue;
-        }
+   
         
         const updateData = {};
         if (gross !== undefined) updateData.gross = gross;

@@ -1,5 +1,7 @@
 // routes/employeeRoutes.js
 import express from "express";
+import multer from 'multer';
+
 import {
   createEmployee,
   getAllEmployees,
@@ -39,10 +41,24 @@ import {
   updateEmployeeTaxData,
   uploadEmployeeFile,
   deleteEmployeeFile,
-  upload
 } from "../controllers/employeeController.js";
 
 import protect from "../middlewares/authMiddleware.js";
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, PNG, JPEG allowed'), false);
+    }
+  }
+});
 const router = express.Router();
 
 /**
@@ -588,22 +604,84 @@ router.delete('/:id/file',protect, deleteEmployeeFile);
  *         $ref: '#/components/responses/ServerError'
  */
 router.get("/company/:companyid/download-excel",protect, downloadExcelEmployees);
-
 /**
  * @swagger
  * /api/employees:
  *   post:
- *     summary: Yeni işçi yarat
+ *     summary: Yeni işçi yarat (FormData ilə)
  *     tags: [Employees]
- *     description: Yeni işçi yaradır və vergiləri avtomatik hesablayır
+ *     description: Yeni işçi yaradır, vergiləri avtomatik hesablayır və fayl yükləməyə imkan verir
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
- *             $ref: '#/components/schemas/EmployeeInput'
+ *             type: object
+ *             required:
+ *               - firstName
+ *               - lastName
+ *               - email
+ *               - position
+ *               - gross
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *                 description: İşçinin adı
+ *                 example: "Ali"
+ *               lastName:
+ *                 type: string
+ *                 description: İşçinin soyadı
+ *                 example: "Həsənov"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: İşçinin email ünvanı
+ *                 example: "ali.hesenov@example.com"
+ *               position:
+ *                 type: string
+ *                 description: İşçinin vəzifəsi
+ *                 example: "Proqramçı"
+ *               Department:
+ *                 type: string
+ *                 description: Departament
+ *                 example: "IT"
+ *               gross:
+ *                 type: number
+ *                 format: float
+ *                 description: Brüt maaş (minimum 400 AZN)
+ *                 example: 1500
+ *               hireDate:
+ *                 type: string
+ *                 format: date
+ *                 description: İşə qəbul tarixi
+ *                 example: "2024-01-15"
+ *               phone:
+ *                 type: string
+ *                 description: Telefon nömrəsi
+ *                 example: "+994501234567"
+ *               tin:
+ *                 type: string
+ *                 description: Vergi identifikasiya nömrəsi (TIN)
+ *                 example: "123456789"
+ *               idSerialNumber:
+ *                 type: string
+ *                 description: Şəxsiyyət vəsiqəsinin seriya nömrəsi
+ *                 example: "AZE1234567"
+ *               employeeType:
+ *                 type: string
+ *                 enum: [private, state]
+ *                 description: İşçi növü
+ *                 default: "private"
+ *                 example: "private"
+ *               companyId:
+ *                 type: string
+ *                 description: Şirkət ID-si (token-dan avtomatik alınır)
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Fayl (PDF, PNG, JPEG formatında)
  *     responses:
  *       201:
  *         description: İşçi uğurla yaradıldı
@@ -623,11 +701,11 @@ router.get("/company/:companyid/download-excel",protect, downloadExcelEmployees)
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Yetkisiz giriş
+ *         $ref: '#/components/responses/UnauthorizedError'
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.post("/",protect, createEmployee);
+router.post("/", protect, upload.single('file'), createEmployee);
 
 /**
  * @swagger
