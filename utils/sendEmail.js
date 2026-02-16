@@ -4,17 +4,19 @@ dotenv.config();
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465, // SSL portu
-  secure: true, // SSL
+  port: 465,
+  secure: true,
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS, // Gmail App Password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false, // SSL sertifikat yoxlamasını bypass edir
   },
 });
-
 const sendEmail = async (to, otp) => {
   await transporter.sendMail({
-    from: `"Nummix" <${process.env.GMAIL_USER}>`,
+    from: `"Nummix" <${process.env.EMAIL_USER}>`,
     to,
     subject: "OTP kodunuz",
     text: `Sizin OTP kodunuz: ${otp}`,
