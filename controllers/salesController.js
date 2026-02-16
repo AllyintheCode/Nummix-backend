@@ -1,11 +1,13 @@
-import Customer from "../models/customersSchema.js";
 import Sale from "../models/salesSchema.js";
+import Supplier from "../models/suppliersSchema.js";
 
 export const getAllSales = async (req, res) => {
     try {
-        const sales = await Sale.find({ userId: req.user?._id }).sort({
-            createdAt: -1,
-        });
+        const sales = await Sale.find({ userId: req.user?._id, isActive: true })
+            .sort({
+                createdAt: -1,
+            })
+            .populate("supplierId");
 
         if (!sales || !sales.length) {
             return res.status(404).json({ message: "No sales records found." });
@@ -26,7 +28,9 @@ export const getSingleSale = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Sale ID must be provided." });
         }
-        const sale = await Sale.findOne({ _id: id, userId: req.user?._id });
+        const sale = await Sale.findOne({ _id: id, userId: req.user?._id, isActive: true }).populate(
+            "supplierId",
+        );
 
         if (!sale) {
             return res.status(404).json({ message: "Sale record not found." });
@@ -43,33 +47,36 @@ export const getSingleSale = async (req, res) => {
 
 export const createSale = async (req, res) => {
     try {
-        const { invoiceNumber, date, customerId, amount, status } = req.body;
+        const { orderNumber, date, deliveryDate, supplierId, amount, status, notes } = req.body;
 
-        if (!invoiceNumber || !date || !customerId || !amount) {
+        if (!orderNumber || !date || !deliveryDate || !supplierId || !amount) {
             return res.status(400).json({ message: "All fields are required." });
         }
 
-        const customer = await Customer.findOne({ _id: customerId, userId: req.user?._id });
-        if (!customer) {
-            return res.status(404).json({ message: "Customer not found." });
+        const supplier = await Supplier.findOne({ _id: supplierId, userId: req.user?._id });
+        if (!supplier) {
+            return res.status(404).json({ message: "Supplier not found." });
         }
 
         const newSale = new Sale({
             userId: req.user?._id,
-            invoiceNumber,
+            orderNumber,
             date,
-            customerId,
+            deliveryDate,
+            supplierId: supplier._id,
             amount,
             status,
+            notes,
         });
 
         const savedSale = await newSale.save();
 
         res.status(201).json({
             message: "Sale record created successfully",
-            data: savedSale,
+            data: { ...savedSale._doc, supplierId: supplier },
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -86,17 +93,20 @@ export const editSale = async (req, res) => {
             return res.status(404).json({ message: "Sale record not found." });
         }
 
-        sale.invoiceNumber = req.body.invoiceNumber || sale.invoiceNumber;
+        sale.orderNumber = req.body.orderNumber || sale.orderNumber;
+        sale.supplierId = req.body.supplierId || sale.supplierId;
         sale.date = req.body.date || sale.date;
+        sale.deliveryDate = req.body.deliveryDate || sale.deliveryDate;
         sale.amount = req.body.amount || sale.amount;
         sale.status = req.body.status || sale.status;
+        sale.notes = req.body.notes || sale.notes;
 
-        if (req.body.customerId) {
-            const customer = await Customer.findOne({ _id: req.body.customerId, userId: req.user?._id });
-            if (!customer) {
-                return res.status(404).json({ message: "Customer not found." });
+        if (req.body.supplierId) {
+            const supplier = await Supplier.findOne({ _id: req.body.supplierId, userId: req.user?._id });
+            if (!supplier) {
+                return res.status(404).json({ message: "Supplier not found." });
             }
-            sale.customerId = customer._id;
+            sale.supplierId = supplier._id;
         }
 
         await sale.save();

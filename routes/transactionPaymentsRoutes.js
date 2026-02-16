@@ -1,12 +1,12 @@
 import express from "express";
 
 import {
-    changePaymentStatus,
-    createPayment,
-    editPayment,
-    getAllPayments,
-    getSinglePayment,
-} from "../controllers/paymentsController.js";
+    changeTransactionPaymentStatus,
+    createTransactionPayment,
+    editTransactionPayment,
+    getAllTransactionPayments,
+    getSingleTransactionPayment,
+} from "../controllers/transactionPaymentController.js";
 import protect from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
@@ -14,15 +14,15 @@ const router = express.Router();
 /**
  * @openapi
  * tags:
- *   - name: Payments
+ *   - name: TransactionPayments
  *     description: Customer payment management
  */
 
 /**
  * @openapi
- * /api/payments:
+ * /api/transaction-payments:
  *   get:
- *     tags: [Payments]
+ *     tags: [TransactionPayments]
  *     summary: Get all payments
  *     security:
  *       - bearerAuth: []
@@ -35,20 +35,20 @@ const router = express.Router();
  *         description: Full-text search query
  *     responses:
  *       200:
- *         description: Payments retrieved successfully
+ *         description: TransactionPayments retrieved successfully
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: No payments found
  */
 
-router.get("/", protect, getAllPayments);
+router.get("/", protect, getAllTransactionPayments);
 
 /**
  * @openapi
- * /api/payments/{id}:
+ * /api/transaction-payments/{id}:
  *   get:
- *     tags: [Payments]
+ *     tags: [TransactionPayments]
  *     summary: Get a single payment by ID
  *     security:
  *       - bearerAuth: []
@@ -58,22 +58,22 @@ router.get("/", protect, getAllPayments);
  *         required: true
  *         schema:
  *           type: string
- *         description: Payment ID
+ *         description: TransactionPayment ID
  *     responses:
  *       200:
- *         description: Payment retrieved successfully
+ *         description: TransactionPayment retrieved successfully
  *       401:
  *         description: Unauthorized
  *       404:
- *         description: Payment not found
+ *         description: TransactionPayment not found
  */
-router.get("/:id", protect, getSinglePayment);
+router.get("/:id", protect, getSingleTransactionPayment);
 
 /**
  * @openapi
- * /api/payments:
+ * /api/transaction-payments:
  *   post:
- *     tags: [Payments]
+ *     tags: [TransactionPayments]
  *     summary: Create a payment record
  *     security:
  *       - bearerAuth: []
@@ -102,7 +102,7 @@ router.get("/:id", protect, getSinglePayment);
  *                 enum: [Pending, Completed, Cancelled]
  *     responses:
  *       201:
- *         description: Payment record created successfully
+ *         description: TransactionPayment record created successfully
  *       400:
  *         description: Validation error
  *       401:
@@ -110,13 +110,13 @@ router.get("/:id", protect, getSinglePayment);
  *       404:
  *         description: Customer not found
  */
-router.post("/", protect, createPayment);
+router.post("/", protect, createTransactionPayment);
 
 /**
  * @openapi
- * /api/payments/{id}:
+ * /api/transaction-payments/{id}:
  *   patch:
- *     tags: [Payments]
+ *     tags: [TransactionPayments]
  *     summary: Update a payment record by ID
  *     security:
  *       - bearerAuth: []
@@ -126,7 +126,7 @@ router.post("/", protect, createPayment);
  *         required: true
  *         schema:
  *           type: string
- *         description: Payment ID
+ *         description: TransactionPayment ID
  *     requestBody:
  *       required: true
  *       content:
@@ -151,19 +151,19 @@ router.post("/", protect, createPayment);
  *                 enum: [Pending, Completed, Cancelled]
  *     responses:
  *       200:
- *         description: Payment record updated successfully
+ *         description: TransactionPayment record updated successfully
  *       401:
  *         description: Unauthorized
  *       404:
- *         description: Payment record not found
+ *         description: TransactionPayment record not found
  */
-router.patch("/:id", protect, editPayment);
+router.patch("/:id", protect, editTransactionPayment);
 
 /**
  * @openapi
- * /api/payments/{id}/status:
+ * /api/transaction-payments/{id}/status:
  *   patch:
- *     tags: [Payments]
+ *     tags: [TransactionPayments]
  *     summary: Toggle payment record active status
  *     security:
  *       - bearerAuth: []
@@ -173,14 +173,14 @@ router.patch("/:id", protect, editPayment);
  *         required: true
  *         schema:
  *           type: string
- *         description: Payment ID
+ *         description: TransactionPayment ID
  *     responses:
  *       200:
- *         description: Payment record updated successfully
+ *         description: TransactionPayment record updated successfully
  *       401:
  *         description: Unauthorized
  *       404:
- *         description: Payment record not found
+ *         description: TransactionPayment record not found
  */
-router.patch("/:id/status", protect, changePaymentStatus);
+router.patch("/:id/status", protect, changeTransactionPaymentStatus);
 export default router;

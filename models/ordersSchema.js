@@ -14,6 +14,8 @@ const OrderSchema = new mongoose.Schema(
             default: "Pending",
         },
 
+        notes: { type: String, trim: true },
+
         isActive: { type: Boolean, default: true },
     },
     { timestamps: true }

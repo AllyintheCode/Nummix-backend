@@ -4,6 +4,7 @@ export const getAllSuppliers = async (req, res) => {
     try {
         const suppliers = await Supplier.find({
             userId: req.user?._id,
+            isActive: true,
         }).sort({
             createdAt: -1,
         });
@@ -27,7 +28,7 @@ export const getSingleSupplier = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Supplier ID must be provided." });
         }
-        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id });
+        const supplier = await Supplier.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!supplier) {
             return res.status(404).json({ message: "Supplier not found." });
@@ -44,9 +45,9 @@ export const getSingleSupplier = async (req, res) => {
 
 export const createSupplier = async (req, res) => {
     try {
-        const { companyName, taxId, contactName, phoneNumber, contactEmail, address } = req.body;
+        const { companyName, taxId, contactPerson, phone, email, address } = req.body;
 
-        if (!companyName || !taxId || !contactName || !phoneNumber || !contactEmail || !address) {
+        if (!companyName || !taxId || !contactPerson || !phone || !email || !address) {
             return res.status(400).json({ message: "All fields are required." });
         }
 
@@ -54,9 +55,9 @@ export const createSupplier = async (req, res) => {
             userId: req.user?._id,
             companyName,
             taxId,
-            contactName,
-            phoneNumber,
-            contactEmail,
+            contactPerson,
+            phone,
+            email,
             address,
         });
 
@@ -67,6 +68,7 @@ export const createSupplier = async (req, res) => {
             data: savedSupplier,
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -85,9 +87,9 @@ export const editSupplier = async (req, res) => {
 
         supplier.companyName = req.body.companyName || supplier.companyName;
         supplier.taxId = req.body.taxId || supplier.taxId;
-        supplier.contactName = req.body.contactName || supplier.contactName;
-        supplier.phoneNumber = req.body.phoneNumber || supplier.phoneNumber;
-        supplier.contactEmail = req.body.contactEmail || supplier.contactEmail;
+        supplier.contactPerson = req.body.contactPerson || supplier.contactPerson;
+        supplier.phone = req.body.phone || supplier.phone;
+        supplier.email = req.body.email || supplier.email;
         supplier.address = req.body.address || supplier.address;
 
         await supplier.save();
@@ -97,6 +99,7 @@ export const editSupplier = async (req, res) => {
             data: supplier,
         });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
 };

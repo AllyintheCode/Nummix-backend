@@ -3,7 +3,7 @@ import Supplier from "../models/suppliersSchema.js";
 
 export const getAllOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ userId: req.user?._id }).sort({
+        const orders = await Order.find({ userId: req.user?._id, isActive: true }).sort({
             createdAt: -1,
         });
 
@@ -26,7 +26,7 @@ export const getSingleOrder = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -43,7 +43,7 @@ export const getSingleOrder = async (req, res) => {
 
 export const createOrder = async (req, res) => {
     try {
-        const { orderNumber, supplierId, date, deliveryDate, amount, status } = req.body;
+        const { orderNumber, supplierId, date, deliveryDate, amount, status, notes } = req.body;
 
         if (!orderNumber || !supplierId || !date || !deliveryDate || amount == null) {
             return res.status(400).json({ message: "All required fields must be provided." });
@@ -62,6 +62,7 @@ export const createOrder = async (req, res) => {
             deliveryDate,
             amount,
             status,
+            notes,
         });
 
         const savedOrder = await newOrder.save();
@@ -81,7 +82,7 @@ export const editOrder = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
@@ -92,6 +93,7 @@ export const editOrder = async (req, res) => {
         order.deliveryDate = req.body.deliveryDate || order.deliveryDate;
         order.amount = req.body.amount ?? order.amount;
         order.status = req.body.status || order.status;
+        order.notes = req.body.notes || order.notes;
 
         if (req.body.supplierId) {
             const supplier = await Supplier.findOne({ _id: req.body.supplierId, userId: req.user?._id });
@@ -118,7 +120,7 @@ export const changeOrderStatus = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Order ID must be provided." });
         }
-        const order = await Order.findOne({ _id: id, userId: req.user?._id });
+        const order = await Order.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!order) {
             return res.status(404).json({ message: "Order not found." });
