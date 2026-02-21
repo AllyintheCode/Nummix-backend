@@ -2,7 +2,7 @@ import Product from "../models/productsSchema.js";
 
 export const getAllProducts = async (req, res) => {
     try {
-        const products = await Product.find({ userId: req.user?._id }).sort({
+        const products = await Product.find({ userId: req.user?._id, isActive: true }).sort({
             createdAt: -1,
         });
 
@@ -25,7 +25,7 @@ export const getSingleProduct = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Product ID must be provided." });
         }
-        const product = await Product.findOne({ _id: id, userId: req.user?._id });
+        const product = await Product.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!product) {
             return res.status(404).json({ message: "Product not found." });
@@ -45,12 +45,13 @@ export const createProduct = async (req, res) => {
         const {
             SKU,
             barcode,
-            name,
+            productName,
             category,
             unitOfMeasure,
             minStock,
             maxStock,
-            price,
+            cost,
+            initialQuantity,
             storageLocation,
             status,
         } = req.body;
@@ -58,29 +59,34 @@ export const createProduct = async (req, res) => {
         if (
             !SKU ||
             !barcode ||
-            !name ||
+            !productName ||
             !category ||
             !unitOfMeasure ||
             minStock == null ||
             maxStock == null ||
-            price == null ||
+            cost == null ||
+            initialQuantity == null ||
             !storageLocation
         ) {
             return res.status(400).json({ message: "All required fields must be provided." });
         }
 
+        const image = req.file ? req.file.path.replace(/\\/g, "/") : undefined;
+
         const newProduct = new Product({
             userId: req.user?._id,
             SKU,
             barcode,
-            name,
+            productName,
             category,
             unitOfMeasure,
             minStock,
             maxStock,
-            price,
+            cost,
+            initialQuantity,
             storageLocation,
             status,
+            ...(image ? { image } : {}),
         });
 
         const savedProduct = await newProduct.save();
@@ -101,7 +107,7 @@ export const editProduct = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Product ID must be provided." });
         }
-        const product = await Product.findOne({ _id: id, userId: req.user?._id });
+        const product = await Product.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!product) {
             return res.status(404).json({ message: "Product not found." });
@@ -109,14 +115,19 @@ export const editProduct = async (req, res) => {
 
         product.SKU = req.body.SKU || product.SKU;
         product.barcode = req.body.barcode || product.barcode;
-        product.name = req.body.name || product.name;
+        product.productName = req.body.productName || product.productName;
         product.category = req.body.category || product.category;
         product.unitOfMeasure = req.body.unitOfMeasure || product.unitOfMeasure;
         product.minStock = req.body.minStock ?? product.minStock;
         product.maxStock = req.body.maxStock ?? product.maxStock;
-        product.price = req.body.price ?? product.price;
+        product.cost = req.body.cost ?? product.cost;
+        product.initialQuantity = req.body.initialQuantity ?? product.initialQuantity;
         product.storageLocation = req.body.storageLocation || product.storageLocation;
         product.status = req.body.status || product.status;
+
+        if (req.file) {
+            product.image = req.file.path.replace(/\\/g, "/");
+        }
 
         await product.save();
 
@@ -135,7 +146,7 @@ export const changeProductStatus = async (req, res) => {
         if (!id) {
             return res.status(400).json({ message: "Product ID must be provided." });
         }
-        const product = await Product.findOne({ _id: id, userId: req.user?._id });
+        const product = await Product.findOne({ _id: id, userId: req.user?._id, isActive: true });
 
         if (!product) {
             return res.status(404).json({ message: "Product not found." });

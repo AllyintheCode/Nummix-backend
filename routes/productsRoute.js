@@ -8,6 +8,7 @@ import {
     getSingleProduct,
 } from "../controllers/productsController.js";
 import protect from "../middlewares/authMiddleware.js";
+import { uploadImage } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -80,33 +81,38 @@ router.get("/:id", protect, getSingleProduct);
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [SKU, barcode, name, category, unitOfMeasure, minStock, maxStock, price, storageLocation]
+ *             required: [SKU, barcode, productName, category, unitOfMeasure, minStock, maxStock, cost, initialQuantity, storageLocation]
  *             properties:
  *               SKU:
  *                 type: string
  *               barcode:
  *                 type: string
- *               name:
+ *               productName:
  *                 type: string
  *               category:
  *                 type: string
  *               unitOfMeasure:
  *                 type: string
- *                 enum: [kg, g, lb, oz, l, ml, pieces]
+ *                 enum: [kg, g, cm, m, lb, oz, l, ml, pieces, units]
  *               minStock:
  *                 type: number
  *               maxStock:
  *                 type: number
- *               price:
+ *               cost:
+ *                 type: number
+ *               initialQuantity:
  *                 type: number
  *               storageLocation:
  *                 type: string
  *               status:
  *                 type: string
  *                 enum: [Down, Good]
+ *               image:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       201:
  *         description: Product created successfully
@@ -115,7 +121,7 @@ router.get("/:id", protect, getSingleProduct);
  *       401:
  *         description: Unauthorized
  */
-router.post("/", protect, createProduct);
+router.post("/", protect, uploadImage.single("image"), createProduct);
 
 /**
  * @openapi
@@ -135,7 +141,7 @@ router.post("/", protect, createProduct);
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -143,24 +149,29 @@ router.post("/", protect, createProduct);
  *                 type: string
  *               barcode:
  *                 type: string
- *               name:
+ *               productName:
  *                 type: string
  *               category:
  *                 type: string
  *               unitOfMeasure:
  *                 type: string
- *                 enum: [kg, g, lb, oz, l, ml, pieces]
+ *                 enum: [kg, g, cm, m, lb, oz, l, ml, pieces, units]
  *               minStock:
  *                 type: number
  *               maxStock:
  *                 type: number
- *               price:
+ *               cost:
+ *                 type: number
+ *               initialQuantity:
  *                 type: number
  *               storageLocation:
  *                 type: string
  *               status:
  *                 type: string
  *                 enum: [Down, Good]
+ *               image:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
  *         description: Product updated successfully
@@ -169,7 +180,7 @@ router.post("/", protect, createProduct);
  *       404:
  *         description: Product not found
  */
-router.patch("/:id", protect, editProduct);
+router.patch("/:id", protect, uploadImage.single("image"), editProduct);
 
 /**
  * @openapi
