@@ -1,9 +1,19 @@
 import Warehouse from "../models/warehousesSchema.js";
 
+const respondDuplicateKey = (res, error) => {
+    if (!error || error.code !== 11000) return false;
+
+    const fields = error.keyPattern ? Object.keys(error.keyPattern) : [];
+    const fieldList = fields.length ? fields.join(", ") : "field";
+    res.status(409).json({ message: `Duplicate value for ${fieldList}.` });
+
+    return true;
+};
+
 export const getAllWarehouses = async (req, res) => {
     try {
         const warehouses = await Warehouse.find({
-            userId: req.user?._id
+            userId: req.user?._id,
         }).sort({
             createdAt: -1,
         });
@@ -17,6 +27,7 @@ export const getAllWarehouses = async (req, res) => {
             data: warehouses,
         });
     } catch (error) {
+        if (respondDuplicateKey(res, error)) return;
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -38,6 +49,7 @@ export const getSingleWarehouse = async (req, res) => {
             data: warehouse,
         });
     } catch (error) {
+        if (respondDuplicateKey(res, error)) return;
         res.status(500).json({ message: "Internal server error." });
     }
 };

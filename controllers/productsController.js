@@ -1,5 +1,15 @@
 import Product from "../models/productsSchema.js";
 
+const respondDuplicateKey = (res, error) => {
+    if (!error || error.code !== 11000) return false;
+
+    const fields = error.keyPattern ? Object.keys(error.keyPattern) : [];
+    const fieldList = fields.length ? fields.join(", ") : "field";
+    res.status(409).json({ message: `Duplicate value for ${fieldList}.` });
+
+    return true;
+};
+
 export const getAllProducts = async (req, res) => {
     try {
         const products = await Product.find({ userId: req.user?._id, isActive: true }).sort({
@@ -15,6 +25,7 @@ export const getAllProducts = async (req, res) => {
             data: products,
         });
     } catch (error) {
+        if (respondDuplicateKey(res, error)) return;
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -96,6 +107,7 @@ export const createProduct = async (req, res) => {
             data: savedProduct,
         });
     } catch (error) {
+        if (respondDuplicateKey(res, error)) return;
         console.log(error);
         res.status(500).json({ message: "Internal server error." });
     }
@@ -136,6 +148,7 @@ export const editProduct = async (req, res) => {
             data: product,
         });
     } catch (error) {
+        if (respondDuplicateKey(res, error)) return;
         res.status(500).json({ message: "Internal server error." });
     }
 };

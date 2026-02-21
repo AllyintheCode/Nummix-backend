@@ -7,7 +7,7 @@ const StockItemSchema = new mongoose.Schema(
         quantity: { type: Number, required: true, default: 0 },
         quality: { type: String, enum: ["Accept", "Reject", "Hold"], default: "Accept" },
     },
-    { _id: false }
+    { _id: false },
 );
 
 const HistoryEntrySchema = new mongoose.Schema(
@@ -22,7 +22,7 @@ const HistoryEntrySchema = new mongoose.Schema(
         purchaseOrder: { type: String, trim: true },
         notes: { type: String, trim: true },
     },
-    { _id: false }
+    { _id: false },
 );
 
 const WarehouseSchema = new mongoose.Schema(
@@ -36,7 +36,7 @@ const WarehouseSchema = new mongoose.Schema(
 
         isActive: { type: Boolean, default: true },
     },
-    { timestamps: true }
+    { timestamps: true },
 );
 
 const Warehouse = mongoose.model("Warehouses", WarehouseSchema);

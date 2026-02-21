@@ -41,3 +41,5 @@ coverage/
 # React Native
 .expo/
 .expo-shared/
+
+/uploads/*
