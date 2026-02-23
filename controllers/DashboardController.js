@@ -1,4 +1,5 @@
 import Transaction from "../models/Transaction.js";
+import Payment from "../models/Payment.js"; // Əgər import yoxdursa əlavə et
 
 export const getDashboardStats = async (req, res) => {
   try {
@@ -305,7 +306,6 @@ export const getBalanceBreakdownPercentage = async (req, res) => {
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
-import Payment from "../models/Payment.js";
 import EmployeeFlow from "../models/EmployeeFlow.js";
 
 // Helper funksiyalar (eyni qalır)
@@ -326,11 +326,10 @@ const getCurrentMonthRange = () => {
 };
 
 // ✅ Dashboard ümumi məlumatları (req.user._id ilə)
+
 export const getDashboardData = async (req, res) => {
   try {
-    // Middleware-dən gələn req.user._id istifadə edirik
     const userId = req.user._id;
-    
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -416,44 +415,41 @@ export const getDashboardData = async (req, res) => {
         }
       ]),
       
-      // 5. Son 3 ödəniş
-      Employee.aggregate([
-        { $match: { companyId: new mongoose.Types.ObjectId(userId) } },
-        { $unwind: { path: "$paymentHistory", preserveNullAndEmptyArrays: true } },
-        { $sort: { "paymentHistory.paymentDate": -1 } },
-        { $limit: 3 },
-        {
-          $project: {
-            employeeName: { $concat: ["$firstName", " ", "$lastName"] },
-            amount: "$paymentHistory.amount",
-            date: "$paymentHistory.paymentDate",
-            type: "$paymentHistory.paymentType",
-            status: "$paymentHistory.status"
-          }
-        }
-      ]),
+      // 5. Son 5 ödəniş (Payment modelindən)
+      Payment.find({ userId: userId })
+        .sort({ dueDate: -1 }) // ən son ödəniş tarixinə görə
+        .limit(5)
+        .lean()
+        .then(payments => payments.map(p => ({
+          supplierName: p.supplierName,
+          amount: p.amount,
+          date: p.dueDate,
+          type: p.type,
+          status: p.status,
+          currency: p.currency
+        }))),
       
-      // 6. Gələcək ödənişlər
-      Employee.aggregate([
-        { 
-          $match: { 
-            companyId: new mongoose.Types.ObjectId(userId),
-            nextPaymentDate: { $gte: new Date() }
-          }
-        },
-        { $sort: { nextPaymentDate: 1 } },
-        { $limit: 4 },
-        {
-          $project: {
-            employeeName: { $concat: ["$firstName", " ", "$lastName"] },
-            amount: "$gross",
-            netAmount: "$Net_salary",
-            nextPaymentDate: "$nextPaymentDate",
-            department: "$Department"
-          }
-        }
-      ])
+      // 6. Gələcək ödənişlər (Payment modelindən)
+      Payment.find({ 
+        userId: userId,
+        dueDate: { $gte: new Date() },
+        status: { $ne: "completed" } // tamamlanmayanlar
+      })
+        .sort({ dueDate: 1 }) // ən yaxın tarix əvvəldə
+        .limit(5)
+        .lean()
+        .then(payments => payments.map(p => ({
+          supplierName: p.supplierName,
+          amount: p.amount,
+          dueDate: p.dueDate,
+          type: p.type,
+          status: p.status,
+          currency: p.currency
+        })))
     ]);
+
+    // Qalan hissələr (departament statistikaları, işçi statusları və s.) eyni qalır
+    // ...
 
     // Departament statistikaları
     const departmentStats = await Employee.aggregate([
@@ -499,11 +495,9 @@ export const getDashboardData = async (req, res) => {
     const totalCount = attendanceData.totalCount?.[0]?.count || 0;
     const attendanceRate = totalCount > 0 ? (presentCount / totalCount) * 100 : 0;
 
-    // Maaş statistikaları
     const salaryData = salaryStats[0] || {};
     const leaveData = leaveStats[0] || {};
 
-    // Departament faizləri
     const totalGrossAll = salaryData.totalGross || 1;
     const departmentStatsWithPercentage = departmentStats.map(dept => ({
       ...dept,
@@ -535,8 +529,8 @@ export const getDashboardData = async (req, res) => {
           percentage: ((stat.count / totalEmployees) * 100).toFixed(1)
         })),
         departments: departmentStatsWithPercentage,
-        recentPayments,
-        upcomingPayments,
+        recentPayments,   // yeni məlumatlar
+        upcomingPayments, // yeni məlumatlar
         attendanceBreakdown: attendanceData.statusStats?.map(stat => ({
           status: stat._id || "unknown",
           count: stat.count
