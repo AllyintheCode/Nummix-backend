@@ -41,6 +41,7 @@ import {
   updateEmployeeTaxData,
   uploadEmployeeFile,
   deleteEmployeeFile,
+  getAllLeavesForCompany
 } from "../controllers/employeeController.js";
 
 import protect from "../middlewares/authMiddleware.js";
@@ -2151,5 +2152,7 @@ router.get("/reports/salaries",protect, getSalaryReport);
  *         $ref: '#/components/responses/ServerError'
  */
 router.put("/salaries/bulk",protect, bulkUpdateSalaries);
+router.get("/leaves/company", protect, getAllLeavesForCompany);
+
 
 export default router;

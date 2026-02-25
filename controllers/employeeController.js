@@ -2454,3 +2454,46 @@ export const downloadExcelEmployees = async (req, res) => {
     });
   }
 };
+export const getAllLeavesForCompany = async (req, res) => {
+  try {
+    const companyId = req.user._id; // və ya req.user.companyId
+    
+    // 1. Bütün işçiləri götür (getEmployeesByCompany funksiyasını təkrar istifadə et)
+    const employees = await Employee.find({ companyId })
+      .select("firstName lastName leaves Department position");
+
+    // 2. Məzuniyyətləri topla
+    const allLeaves = employees.flatMap(emp => 
+      (emp.leaves || []).map(leave => ({
+        ...leave.toObject(),
+        employeeId: emp._id,
+        employeeName: `${emp.firstName} ${emp.lastName}`,
+        department: emp.Department,
+        position: emp.position
+      }))
+    );
+
+    // 3. Tarixə görə sırala (ən yeni öndə)
+    allLeaves.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+
+    res.json({
+      success: true,
+      data: allLeaves,
+      count: allLeaves.length,
+      stats: {
+        totalEmployees: employees.length,
+        employeesWithLeaves: employees.filter(e => e.leaves?.length > 0).length,
+        totalLeaves: allLeaves.length,
+        pendingCount: allLeaves.filter(l => l.status === 'pending').length,
+        approvedCount: allLeaves.filter(l => l.status === 'approved').length,
+        rejectedCount: allLeaves.filter(l => l.status === 'rejected').length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all leaves:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};

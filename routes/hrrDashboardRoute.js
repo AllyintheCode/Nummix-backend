@@ -11,7 +11,8 @@ import {
   getEmployeeFlowStats,
   getUserStatistics,
   testDashboard,
-} from "../controllers/DashboardController.js";
+} from "../controllers/dashboardController.js";
+
 import protect from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
