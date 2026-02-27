@@ -5,7 +5,7 @@ import {
   getIncomeExpenseLast6Months,
   getProfitDynamicsLast6Months,
   getTotalAssets,
-} from "../controllers/dashboardController.js";
+} from "../controllers/DashboardController.js";
 
 import protect from "../middlewares/authMiddleware.js";
 

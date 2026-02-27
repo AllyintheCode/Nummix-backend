@@ -11,7 +11,7 @@ import {
   getEmployeeFlowStats,
   getUserStatistics,
   testDashboard,
-} from "../controllers/dashboardController.js";
+} from "../controllers/DashboardController.js";
 
 import protect from "../middlewares/authMiddleware.js";
 
