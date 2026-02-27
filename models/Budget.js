@@ -1,68 +1,89 @@
 import mongoose from "mongoose";
 
-// 🔹 Alt schema: Kateqoriyalar (məs. avadanlıq, cloud xidməti və s.)
+// 🔹 Alt schema: Kateqoriyalar
 const categorySchema = new mongoose.Schema({
-  name: { type: String, required: true }, // Kateqoriya adı
-  plannedAmount: { type: Number, required: true }, // Planlanmış büdcə
-  actualAmount: { type: Number, default: 0 }, // Faktiki xərclənən
-  difference: { type: Number, default: 0 }, // Fərq (planned - actual)
-  usageRate: { type: Number, default: 0 }, // % istifadə dərəcəsi
+  name: { type: String, required: true },
+  plannedAmount: { type: Number, required: true },
+  actualAmount: { type: Number, default: 0 },
+  difference: { type: Number, default: 0 },
+  usageRate: { type: Number, default: 0 },
   status: {
-    // Limit keçilib-keçilməyib
     type: String,
     enum: ["within_budget", "over_budget"],
     default: "within_budget",
   },
 });
 
-//Aylıq büdcə planı (hər ay üçün)
+// 🔹 Aylıq büdcə planı
 const monthlyBudgetSchema = new mongoose.Schema({
-  month: { type: String, required: true }, // Məs: "Yanvar"
-  plannedTotal: { type: Number }, // Ay üçün planlanmış ümumi məbləğ
-  actualTotal: { type: Number, default: 0 }, // Faktiki xərclənən ümumi məbləğ
-  difference: { type: Number, default: 0 }, // Fərq
-  usageRate: { type: Number, default: 0 }, // Faizlə istifadə səviyyəsi
-  categories: [categorySchema], // Alt kateqoriyalar
+  month: { type: String, required: true },
+  plannedTotal: { type: Number, default: 0 },
+  actualTotal: { type: Number, default: 0 },
+  difference: { type: Number, default: 0 },
+  usageRate: { type: Number, default: 0 },
+
+  // ✅ default əlavə edildi
+  categories: { type: [categorySchema], default: [] },
 });
 
-//Əsas schema (departament üzrə)
+// 🔹 Əsas schema
 const budgetSchema = new mongoose.Schema(
   {
-    department: { type: String, required: true }, // Məs: "IT və Texnologiya"
-    year: { type: Number, required: true }, // 2025 və s.
-    monthlyBudgets: [monthlyBudgetSchema], // Aylıq siyahı
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Büdcəni yaradan şəxs
+    department: { type: String, required: true },
+    year: { type: Number, required: true },
+
+    // ✅ default əlavə edildi
+    monthlyBudgets: { type: [monthlyBudgetSchema], default: [] },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-//Məlumat yaddaşa yazılmadan əvvəl avtomatik hesablamalar
+// ✅ duplicate qarşısını alır (çox vacib)
+budgetSchema.index({ department: 1, year: 1 }, { unique: true });
+
+// ✅ Safe pre-save hook
 budgetSchema.pre("save", function (next) {
-  this.monthlyBudgets.forEach((month) => {
-    // Hər kateqoriya üçün fərq və faiz hesabla
-    month.categories.forEach((cat) => {
-      cat.difference = cat.plannedAmount - cat.actualAmount;
-      cat.usageRate =
-        cat.plannedAmount > 0
-          ? (cat.actualAmount / cat.plannedAmount) * 100
-          : 0;
-      cat.status =
-        cat.actualAmount > cat.plannedAmount ? "over_budget" : "within_budget";
+  const months = Array.isArray(this.monthlyBudgets) ? this.monthlyBudgets : [];
+
+  months.forEach((month) => {
+    const cats = Array.isArray(month.categories) ? month.categories : [];
+
+    // Kateqoriya hesablamaları
+    cats.forEach((cat) => {
+      const planned = Number(cat.plannedAmount) || 0;
+      const actual = Number(cat.actualAmount) || 0;
+
+      cat.plannedAmount = planned;
+      cat.actualAmount = actual;
+
+      cat.difference = planned - actual;
+
+      cat.usageRate = planned > 0 ? (actual / planned) * 100 : 0;
+
+      cat.status = actual > planned ? "over_budget" : "within_budget";
     });
 
-    // Ay üzrə ümumi dəyərləri topla
-    const totalPlanned = month.categories.reduce(
-      (sum, c) => sum + c.plannedAmount,
-      0
+    // Ay üzrə cəmlər
+    const totalPlanned = cats.reduce(
+      (sum, c) => sum + (Number(c.plannedAmount) || 0),
+      0,
     );
-    const totalActual = month.categories.reduce(
-      (sum, c) => sum + c.actualAmount,
-      0
+
+    const totalActual = cats.reduce(
+      (sum, c) => sum + (Number(c.actualAmount) || 0),
+      0,
     );
 
     month.plannedTotal = totalPlanned;
     month.actualTotal = totalActual;
+
     month.difference = totalPlanned - totalActual;
+
     month.usageRate = totalPlanned > 0 ? (totalActual / totalPlanned) * 100 : 0;
   });
 

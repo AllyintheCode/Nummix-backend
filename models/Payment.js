@@ -2,8 +2,12 @@ import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema(
   {
-            userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     type: {
       type: String,
       enum: ["outflow", "receipt"],
@@ -40,21 +44,29 @@ const paymentSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// Status avtomatik günə görə dəyişəcək
+// Status avtomatik günə görə dəyişəcək (düzgün versiya)
 paymentSchema.pre("save", function (next) {
-  const today = new Date();
+  const now = new Date();
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const due = new Date(this.dueDate);
+
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+
   if (this.status !== "completed") {
-    if (this.dueDate < today) {
+    if (dueDay < today) {
       this.status = "overdue";
-    } else if (this.dueDate.toDateString() === today.toDateString()) {
+    } else if (dueDay.getTime() === today.getTime()) {
       this.status = "pending";
     } else {
       this.status = "planned";
     }
   }
+
   next();
 });
 

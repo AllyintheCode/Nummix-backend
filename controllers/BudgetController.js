@@ -4,31 +4,53 @@ import ExcelJS from "exceljs";
 //Yeni büdcə planı yaratmaq
 export const createBudget = async (req, res) => {
   try {
-    const { department, year, monthlyBudgets } = req.body;
+    let { department, year, monthlyBudgets } = req.body;
 
-    // eyni departament və il üçün təkrar olmasın
-    const existingBudget = await Budget.findOne({ department, year });
+    if (!department || year == null) {
+      return res.status(400).json({ message: "department və year mütləqdir" });
+    }
+
+    department = String(department).trim();
+    const yearNum = Number(year);
+
+    if (!Number.isFinite(yearNum)) {
+      return res.status(400).json({ message: "Year düzgün deyil" });
+    }
+
+    if (!Array.isArray(monthlyBudgets)) monthlyBudgets = [];
+
+    // eyni departament+il təkrar olmasın
+    const existingBudget = await Budget.findOne({
+      department,
+      year: yearNum,
+    });
+
     if (existingBudget) {
       return res.status(400).json({
         message: "Bu departament üçün bu il artıq büdcə planı mövcuddur.",
       });
     }
 
-    const budget = new Budget({
+    const budget = await Budget.create({
       department,
-      year,
+      year: yearNum,
       monthlyBudgets,
-      createdBy: req.user?._id, // Auth varsa istifadəçidən gəlir
+      createdBy: req.user?._id,
     });
 
-    await budget.save();
     res.status(201).json({ message: "Büdcə planı uğurla yaradıldı.", budget });
   } catch (error) {
+    // Unique index error (duplicate)
+    if (error?.code === 11000) {
+      return res.status(400).json({
+        message: "Bu departament üçün bu il artıq büdcə planı mövcuddur.",
+      });
+    }
+
     console.error("Create Budget Error:", error);
     res.status(500).json({ message: "Server xətası baş verdi." });
   }
 };
-
 //Bütün büdcələri gətir (ümumi siyahı)
 export const getBudgets = async (req, res) => {
   try {
