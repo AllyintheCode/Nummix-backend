@@ -4349,11 +4349,12 @@ export const downloadAssetsCSV = async (req, res) => {
 
 // Pul formatı üçün köməkçi funksiya
 // controllers/categoryController.js
+// controllers/categoryController.js
 import Category from "../models/Category.js";
 
 // 📊 KATEQORİYA ƏMƏLİYYATLARI
 
-// Bütün kateqoriyaları gətir
+// Bütün kateqoriyaları gətir (dashboard üçün)
 export const getCategories = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -4618,6 +4619,313 @@ export const loadDefaultCategories = async (req, res) => {
   } catch (error) {
     console.error('❌ LOAD DEFAULT CATEGORIES Error:', error);
     res.status(500).json({ 
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ==============================================
+// 🆕 YENİ CONTROLLER-LƏR (FRONTEND ÜÇÜN)
+// ==============================================
+
+/**
+ * 📊 DASHBOARD STATISTIKALARI
+ * GET /api/categories/:userId/dashboard-stats
+ */
+export const getDashboardStats = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Category modelindəki statik metodu çağır
+    const dashboardData = await Category.getDashboardStats(userId);
+
+    res.json({
+      success: true,
+      data: dashboardData
+    });
+  } catch (error) {
+    console.error('❌ GET DASHBOARD STATS Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * 📊 KATEQORİYA HESABATI
+ * GET /api/categories/:userId/category-report
+ */
+export const getCategoryReport = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Category modelindəki statik metodu çağır
+    const reportData = await Category.getCategoryReport(userId);
+
+    // Ümumi statistikaları hesabla
+    const summary = reportData.reduce((acc, cat) => {
+      acc.totalAssets += cat.stats.count;
+      acc.totalInitialValue += cat.stats.totalInitialValue;
+      acc.totalCurrentValue += cat.stats.totalCurrentValue;
+      acc.totalDepreciation += cat.stats.totalDepreciation;
+      return acc;
+    }, {
+      totalAssets: 0,
+      totalInitialValue: 0,
+      totalCurrentValue: 0,
+      totalDepreciation: 0
+    });
+
+    // Ümumi amortizasiya faizi
+    summary.overallDepreciationPercentage = summary.totalInitialValue > 0
+      ? parseFloat(((summary.totalDepreciation / summary.totalInitialValue) * 100).toFixed(2))
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        categories: reportData,
+        summary
+      }
+    });
+  } catch (error) {
+    console.error('❌ GET CATEGORY REPORT Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * 📊 FİLİAL/LOKASİYA HESABATI
+ * GET /api/categories/:userId/branch-report
+ */
+export const getBranchReport = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Bütün aktiv vəsaitləri gətir
+    const assets = await Asset.find({ 
+      userId, 
+      isDeleted: false 
+    }).populate('category', 'name colorCode');
+
+    // Filial/Lokasiyaya görə qruplaşdır
+    const branchMap = new Map();
+
+    assets.forEach(asset => {
+      // Əgər Asset modelində branch varsa onu istifadə et, yoxsa location-u istifadə et
+      const branchKey = asset.branch || asset.location || 'Digər';
+      const branchName = asset.branch || asset.location || 'Digər';
+      
+      if (!branchMap.has(branchKey)) {
+        branchMap.set(branchKey, {
+          name: branchName,
+          count: 0,
+          totalInitialValue: 0,
+          totalCurrentValue: 0,
+          categories: new Set()
+        });
+      }
+      
+      const data = branchMap.get(branchKey);
+      data.count++;
+      data.totalInitialValue += asset.initialValue || 0;
+      data.totalCurrentValue += asset.currentValue || 0;
+      if (asset.category) {
+        data.categories.add(asset.category.name || 'Unknown');
+      }
+    });
+
+    // Ümumi cari dəyər
+    const totalCurrentValue = assets.reduce((sum, a) => sum + (a.currentValue || 0), 0);
+
+    // Hesabat məlumatlarını formatla
+    const branchReport = Array.from(branchMap.values()).map(branch => ({
+      name: branch.name,
+      count: branch.count,
+      totalInitialValue: parseFloat(branch.totalInitialValue.toFixed(2)),
+      totalCurrentValue: parseFloat(branch.totalCurrentValue.toFixed(2)),
+      depreciation: parseFloat((branch.totalInitialValue - branch.totalCurrentValue).toFixed(2)),
+      share: totalCurrentValue > 0 
+        ? parseFloat(((branch.totalCurrentValue / totalCurrentValue) * 100).toFixed(2))
+        : 0,
+      categories: Array.from(branch.categories)
+    }));
+
+    // Bar chart üçün məlumat
+    const barChartData = branchReport.map(branch => ({
+      name: branch.name,
+      value: branch.totalCurrentValue
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        branches: branchReport,
+        barChartData,
+        summary: {
+          totalBranches: branchReport.length,
+          totalAssets: assets.length,
+          totalValue: parseFloat(totalCurrentValue.toFixed(2))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ GET BRANCH REPORT Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * 📊 PIE CHART ÜÇÜN KATEQORİYA PAYLANMASI
+ * GET /api/categories/:userId/category-distribution
+ */
+export const getCategoryDistribution = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const assets = await Asset.find({ 
+      userId, 
+      isDeleted: false 
+    }).populate('category', 'name colorCode icon');
+
+    const categories = await Category.find({ userId, isActive: true });
+
+    const totalCurrentValue = assets.reduce((sum, a) => sum + (a.currentValue || 0), 0);
+
+    const distribution = categories.map(cat => {
+      const catAssets = assets.filter(a => 
+        a.category && a.category._id.toString() === cat._id.toString()
+      );
+      
+      const catValue = catAssets.reduce((sum, a) => sum + (a.currentValue || 0), 0);
+      const percentage = totalCurrentValue > 0 
+        ? (catValue / totalCurrentValue) * 100 
+        : 0;
+
+      return {
+        id: cat._id,
+        name: cat.name,
+        count: catAssets.length,
+        value: parseFloat(catValue.toFixed(2)),
+        percentage: parseFloat(percentage.toFixed(2)),
+        color: cat.colorCode,
+        icon: cat.icon
+      };
+    }).filter(cat => cat.count > 0); // Yalnız vəsaiti olan kateqoriyalar
+
+    res.json({
+      success: true,
+      data: {
+        distribution: distribution.sort((a, b) => b.value - a.value),
+        totalValue: parseFloat(totalCurrentValue.toFixed(2))
+      }
+    });
+  } catch (error) {
+    console.error('❌ GET CATEGORY DISTRIBUTION Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * 📊 BÜTÜN HESABATLARI BİRDƏ GƏTİR (OPTİMİZASİYA ÜÇÜN)
+ * GET /api/categories/:userId/all-reports
+ */
+export const getAllReports = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Parallel olaraq bütün məlumatları çək
+    const [dashboardStats, categoryReport, branchReport, categoryDistribution] = await Promise.all([
+      Category.getDashboardStats(userId),
+      Category.getCategoryReport(userId),
+      // Branch report-u ayrıca hesabla
+      (async () => {
+        const assets = await Asset.find({ userId, isDeleted: false })
+          .populate('category', 'name');
+        
+        const branchMap = new Map();
+        assets.forEach(asset => {
+          const branch = asset.branch || asset.location || 'Digər';
+          if (!branchMap.has(branch)) {
+            branchMap.set(branch, {
+              name: branch,
+              count: 0,
+              totalCurrentValue: 0
+            });
+          }
+          const data = branchMap.get(branch);
+          data.count++;
+          data.totalCurrentValue += asset.currentValue || 0;
+        });
+
+        return Array.from(branchMap.values()).map(b => ({
+          name: b.name,
+          count: b.count,
+          value: parseFloat(b.totalCurrentValue.toFixed(2))
+        }));
+      })(),
+      // Category distribution-u hesabla
+      (async () => {
+        const assets = await Asset.find({ userId, isDeleted: false })
+          .populate('category', 'name colorCode');
+        
+        const totalValue = assets.reduce((sum, a) => sum + (a.currentValue || 0), 0);
+        const catMap = new Map();
+
+        assets.forEach(asset => {
+          if (!asset.category) return;
+          const catId = asset.category._id.toString();
+          if (!catMap.has(catId)) {
+            catMap.set(catId, {
+              name: asset.category.name,
+              color: asset.category.colorCode,
+              value: 0
+            });
+          }
+          catMap.get(catId).value += asset.currentValue || 0;
+        });
+
+        return Array.from(catMap.values()).map(cat => ({
+          ...cat,
+          percentage: totalValue > 0 ? (cat.value / totalValue) * 100 : 0,
+          value: parseFloat(cat.value.toFixed(2))
+        }));
+      })()
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        dashboard: dashboardStats,
+        categoryReport: {
+          categories: categoryReport,
+          summary: categoryReport.reduce((acc, cat) => {
+            acc.totalAssets += cat.stats.count;
+            acc.totalValue += cat.stats.totalCurrentValue;
+            return acc;
+          }, { totalAssets: 0, totalValue: 0 })
+        },
+        branchReport: {
+          branches: branchReport,
+          barChartData: branchReport
+        },
+        categoryDistribution: categoryDistribution.sort((a, b) => b.value - a.value)
+      }
+    });
+  } catch (error) {
+    console.error('❌ GET ALL REPORTS Error:', error);
+    res.status(500).json({
       success: false,
       message: error.message
     });

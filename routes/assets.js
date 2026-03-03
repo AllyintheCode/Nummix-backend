@@ -30,12 +30,18 @@ import {
   getSimpleDepartmentValues,
   getAssetsExportPage,
   downloadAssetsCSV,
-    getCategories,
+  getCategories,
   createCategory,
   updateCategory,
   deleteCategory,
   getCategoryDetails,
   loadDefaultCategories,
+  // Yeni controller-lər
+  getDashboardStats,
+  getCategoryReport,
+  getBranchReport,
+  getCategoryDistribution,
+  getAllReports,
     getReports,
   getReportDetails,
   deleteReport,
@@ -302,32 +308,6 @@ router.get('/:userId/categories', protect, getCategories);
 
 /**
  * @swagger
- * /api/users/{userId}/categories/default:
- *   post:
- *     summary: Default kateqoriyaları yüklə
- *     tags: [Categories]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - name: userId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Default kateqoriyalar uğurla yükləndi
- *       400:
- *         description: İstifadəçinin artıq kateqoriyaları var
- *       401:
- *         description: Yetkisiz giriş
- *       500:
- *         description: Server xətası
- */
-router.post('/:userId/categories/default', protect, loadDefaultCategories);
-
-/**
- * @swagger
  * /api/users/{userId}/categories:
  *   post:
  *     summary: Yeni kateqoriya yarat
@@ -357,13 +337,13 @@ router.post('/:userId/categories/default', protect, loadDefaultCategories);
  *                 description: Təsvir
  *               amortizationRate:
  *                 type: number
- *                 description: Amortizasiya dərəcəsi
+ *                 description: Amortizasiya dərəcəsi (%)
  *               colorCode:
  *                 type: string
- *                 description: Rəng kodu
+ *                 description: Rəng kodu (hex)
  *               icon:
  *                 type: string
- *                 description: İkon
+ *                 description: İkon (emoji)
  *     responses:
  *       201:
  *         description: Kateqoriya uğurla yaradıldı
@@ -376,6 +356,451 @@ router.post('/:userId/categories/default', protect, loadDefaultCategories);
  */
 router.post('/:userId/categories', protect, createCategory);
 
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/default/load:
+ *   post:
+ *     summary: Default kateqoriyaları yüklə
+ *     tags: [Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Default kateqoriyalar uğurla yükləndi
+ *       400:
+ *         description: İstifadəçinin artıq kateqoriyaları var
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.post('/:userId/categories/default/load', protect, loadDefaultCategories);
+
+// ===================== 🆕 YENİ ROUTE-LAR (STATISTIKALAR) =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/dashboard-stats:
+ *   get:
+ *     summary: Dashboard statistikalarını gətir (ümumi məlumatlar, kateqoriya paylanması)
+ *     tags: [Categories, Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Dashboard statistikaları uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalAssets:
+ *                           type: number
+ *                         totalInitialValue:
+ *                           type: number
+ *                         totalCurrentValue:
+ *                           type: number
+ *                         totalDepreciation:
+ *                           type: number
+ *                         overallDepreciationRate:
+ *                           type: number
+ *                         totalCategories:
+ *                           type: number
+ *                     categoryDistribution:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           count:
+ *                             type: number
+ *                           value:
+ *                             type: number
+ *                           percentage:
+ *                             type: number
+ *                           color:
+ *                             type: string
+ *                           icon:
+ *                             type: string
+ *                     branchStats:
+ *                       type: array
+ *                     topAssets:
+ *                       type: array
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/dashboard-stats', protect, getDashboardStats);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/category-report:
+ *   get:
+ *     summary: Kateqoriyalar üzrə detallı hesabat
+ *     tags: [Categories, Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriya hesabatı uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     categories:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ *                           amortizationRate:
+ *                             type: number
+ *                           colorCode:
+ *                             type: string
+ *                           icon:
+ *                             type: string
+ *                           stats:
+ *                             type: object
+ *                             properties:
+ *                               count:
+ *                                 type: number
+ *                               totalInitialValue:
+ *                                 type: number
+ *                               totalCurrentValue:
+ *                                 type: number
+ *                               totalDepreciation:
+ *                                 type: number
+ *                               depreciationPercentage:
+ *                                 type: number
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalAssets:
+ *                           type: number
+ *                         totalInitialValue:
+ *                           type: number
+ *                         totalCurrentValue:
+ *                           type: number
+ *                         totalDepreciation:
+ *                           type: number
+ *                         overallDepreciationPercentage:
+ *                           type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/category-report', protect, getCategoryReport);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/branch-report:
+ *   get:
+ *     summary: Filial/Lokasiya üzrə hesabat
+ *     tags: [Categories, Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Filial hesabatı uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     branches:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           count:
+ *                             type: number
+ *                           totalInitialValue:
+ *                             type: number
+ *                           totalCurrentValue:
+ *                             type: number
+ *                           depreciation:
+ *                             type: number
+ *                           share:
+ *                             type: number
+ *                           categories:
+ *                             type: array
+ *                     barChartData:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           value:
+ *                             type: number
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalBranches:
+ *                           type: number
+ *                         totalAssets:
+ *                           type: number
+ *                         totalValue:
+ *                           type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/branch-report', protect, getBranchReport);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/category-distribution:
+ *   get:
+ *     summary: Kateqoriya paylanması (Pie chart üçün)
+ *     tags: [Categories, Charts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Kateqoriya paylanması uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     distribution:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           count:
+ *                             type: number
+ *                           value:
+ *                             type: number
+ *                           percentage:
+ *                             type: number
+ *                           color:
+ *                             type: string
+ *                           icon:
+ *                             type: string
+ *                     totalValue:
+ *                       type: number
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/category-distribution', protect, getCategoryDistribution);
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/all-reports:
+ *   get:
+ *     summary: Bütün hesabatları bir sorğuda gətir (Optimallaşdırılmış)
+ *     tags: [Categories, Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Bütün hesabatlar uğurla gətirildi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     dashboard:
+ *                       type: object
+ *                     categoryReport:
+ *                       type: object
+ *                     branchReport:
+ *                       type: object
+ *                     categoryDistribution:
+ *                       type: array
+ *       401:
+ *         description: Yetkisiz giriş
+ *       500:
+ *         description: Server xətası
+ */
+router.get('/:userId/categories/all-reports', protect, getAllReports);
+
+// ===================== STATISTIKA ROUTE-LARI (QISA VERSİYA) =====================
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/stats/summary:
+ *   get:
+ *     summary: Qısa statistik məlumatlar
+ *     tags: [Categories, Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Statistikalar uğurla gətirildi
+ */
+router.get('/:userId/categories/stats/summary', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const Asset = (await import('../models/Asset.js')).default;
+    
+    const assets = await Asset.find({ userId, isDeleted: false });
+    
+    const totalAssets = assets.length;
+    const totalCurrentValue = assets.reduce((sum, a) => sum + (a.currentValue || 0), 0);
+    const totalInitialValue = assets.reduce((sum, a) => sum + (a.initialValue || 0), 0);
+    const totalDepreciation = totalInitialValue - totalCurrentValue;
+    
+    res.json({
+      success: true,
+      data: {
+        totalAssets,
+        totalValue: parseFloat(totalCurrentValue.toFixed(2)),
+        totalDepreciation: parseFloat(totalDepreciation.toFixed(2)),
+        totalCategories: await Category.countDocuments({ userId, isActive: true })
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/{userId}/categories/stats/charts:
+ *   get:
+ *     summary: Chartlar üçün məlumatlar (Pie + Bar)
+ *     tags: [Categories, Charts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Chart məlumatları uğurla gətirildi
+ */
+router.get('/:userId/categories/stats/charts', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Pie chart üçün kateqoriya paylanması
+    const categoryDist = await getCategoryDistribution(req, res);
+    
+    // Bar chart üçün filial məlumatları
+    const assets = await Asset.find({ userId, isDeleted: false });
+    
+    const branchMap = new Map();
+    assets.forEach(asset => {
+      const branch = asset.branch || asset.location || 'Digər';
+      if (!branchMap.has(branch)) {
+        branchMap.set(branch, 0);
+      }
+      branchMap.set(branch, branchMap.get(branch) + (asset.currentValue || 0));
+    });
+    
+    const barData = Array.from(branchMap.entries()).map(([name, value]) => ({
+      name,
+      value: parseFloat(value.toFixed(2))
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        pieChart: categoryDist,
+        barChart: barData
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 /**
  * @swagger
  * /api/users/{userId}/categories/{categoryId}:
