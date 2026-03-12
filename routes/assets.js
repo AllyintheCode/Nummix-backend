@@ -45,11 +45,17 @@ import {
     getReports,
   getReportDetails,
   deleteReport,
-  cleanupOldReports
-
+  cleanupOldReports,
+deleteAssetByInvNo
 
 } from "../controllers/assetController.js";
-
+import {
+  getDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+  getDepartmentStatistics
+} from "../controllers/DepartmentController.js";
 import {
   uploadDocuments,
   handleUploadError,
@@ -2015,6 +2021,12 @@ router.get('/:userId/assets/export/test-pdf', protect, testSimplePDF);
  *         description: Server xətası
  */
 router.get('/:userId/assets/export-page', protect, getAssetsExportPage);
+router.get('/:userId/departments', protect, getDepartments);
+router.post('/:userId/departments', protect, createDepartment);
+router.put('/:userId/departments/:departmentId', protect, updateDepartment);
+router.delete('/:userId/departments/:departmentId', protect, deleteDepartment);
+router.get('/:userId/departments/statistics', protect, getDepartmentStatistics);
+router.delete('/:userId/assets/inventory/:invNo', protect, deleteAssetByInvNo);
 
 
 

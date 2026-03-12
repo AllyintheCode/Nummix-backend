@@ -2,11 +2,28 @@ import User from "../models/User.js";
 import excel from 'exceljs';
 // controllers/assetController.js
 import Asset from "../models/Asset.js";
-import { ExcelService } from '../services/excelServices.js';
+import { ExcelService } from '../services/exceleService.js';
+
 import { PdfService } from '../services/pdfService.js';
 import PDFDocument from 'pdfkit';
 import mongoose from "mongoose";
+const mapDepreciationMethodToBackend = (method) => {
+  const map = {
+    'straightLine': 'Düz xətt',
+    'decliningBalance': 'Azalan qalıq',
+    'unitsOfProduction': 'İstehsal həcmi'
+  };
+  return map[method] || 'Düz xətt';
+};
 
+const mapDepreciationMethodToFrontend = (method) => {
+  const map = {
+    'Düz xətt': 'straightLine',
+    'Azalan qalıq': 'decliningBalance',
+    'İstehsal həcmi': 'unitsOfProduction'
+  };
+  return map[method] || 'straightLine';
+};
 
 // 🏢 BÜTÜN VƏSAİTLƏRİ GƏTİR
 export const getAllAssets = async (req, res) => {
@@ -17,7 +34,7 @@ export const getAllAssets = async (req, res) => {
       category, 
       location, 
       status,
-      department,
+      department,      // frontend-dən gələn department adı (string)
       responsiblePerson,
       isInsured,
       page = 1,
@@ -26,15 +43,43 @@ export const getAllAssets = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    const filter = { userId };
+    // Filter obyekti yarat
+    const filter = { userId, isDeleted: false };
     
-    // Filterləmə
+    // Sadə sahə filtrləri
     if (category) filter.category = category;
     if (location) filter.location = location;
     if (status) filter.status = status;
-    if (department) filter.department = department;
     if (responsiblePerson) filter.responsiblePerson = responsiblePerson;
     if (isInsured !== undefined) filter.isInsured = isInsured === 'true';
+
+    // 🔁 Department adı ilə filter (əgər göndərilibsə)
+    if (department) {
+      // Department adını ObjectId-ə çevir
+      const dept = await Department.findOne({ 
+        userId, 
+        name: department,
+        isActive: true 
+      }).select('_id');
+      
+      if (dept) {
+        filter.department = dept._id;  // ObjectId ilə filter
+      } else {
+        // Uyğun department tapılmadısa, heç bir nəticə qaytarma
+        return res.json({
+          success: true,
+          data: [],
+          pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 },
+          stats: {
+            assetCount: 0,
+            totalValue: 0,
+            currentValue: 0,
+            depreciation: 0,
+            activeAssets: 0
+          }
+        });
+      }
+    }
 
     // Sıralama
     const sortOptions = {};
@@ -43,24 +88,40 @@ export const getAllAssets = async (req, res) => {
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Əsas sorğu: department adını da gətir
     const assets = await Asset.find(filter)
+      .populate('department', 'name')           // department adını əlavə et
       .select('-document.bufferData -__v')
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Ümumi say
     const totalCount = await Asset.countDocuments(filter);
 
-    // Statistika - burada xəta verirdi, düzəldək:
+    // 🔄 Frontend-in gözlədiyi formata çevir
+    const formattedAssets = assets.map(asset => ({
+      invNo: asset.inventoryNumber,
+      name: asset.name,
+      category: asset.category,
+      account: asset.account,
+      location: asset.department?.name || asset.location || 'Müəyyən edilməyib',
+      initialValue: asset.initialValue,
+      currentValue: asset.currentValue,
+      status: asset.status,
+      _id: asset._id  // Edit və delete üçün ID əlavə et
+    }));
+
+    // 📊 Statistika (bütün assetlər üzrə, filter tətbiq edilmir)
     const stats = await Asset.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+      { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: false } },
       {
         $group: {
           _id: null,
-          totalAssets: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
+          assetCount: { $sum: 1 },
+          totalValue: { $sum: "$initialValue" },
+          currentValue: { $sum: "$currentValue" },
+          depreciation: { $sum: "$amortization" },
           activeAssets: { 
             $sum: { $cond: [{ $eq: ["$status", "Aktiv"] }, 1, 0] }
           }
@@ -69,29 +130,23 @@ export const getAllAssets = async (req, res) => {
     ]);
     
     const statResult = stats[0] || {
-      totalAssets: 0,
-      totalInitialValue: 0,
-      totalCurrentValue: 0,
-      totalAmortization: 0,
+      assetCount: 0,
+      totalValue: 0,
+      currentValue: 0,
+      depreciation: 0,
       activeAssets: 0
     };
 
     res.json({
       success: true,
-      data: assets,
+      data: formattedAssets,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total: totalCount,
         pages: Math.ceil(totalCount / limit)
       },
-      stats: {
-        totalAssets: statResult.totalAssets,
-        totalInitialValue: statResult.totalInitialValue,
-        totalCurrentValue: statResult.totalCurrentValue,
-        totalAmortization: statResult.totalAmortization,
-        activeAssets: statResult.activeAssets
-      }
+      stats: statResult  // Birbaşa statResult qaytarılır (artıq düzgün adlarla)
     });
   } catch (error) {
     console.error('❌ GET ALL ASSETS Error:', error);
@@ -388,7 +443,50 @@ export const getReports = async (req, res) => {
     });
   }
 };
+// controllers/assetExportController.js (və ya harada istifadə edirsənsə)
 
+
+// ✅ Bütün assetləri Excel formatında endir
+export const downloadAllAssetsExcel = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const assets = await Asset.find({ userId }).select('-document.bufferData -__v');
+
+    const columns = [
+      { header: 'Inventory No', key: 'inventoryNumber', width: 20 },
+      { header: 'Name', key: 'name', width: 30 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Location', key: 'location', width: 20 },
+      { header: 'Initial Value', key: 'initialValue', width: 15 },
+      { header: 'Current Value', key: 'currentValue', width: 15 },
+      { header: 'Status', key: 'status', width: 15 }
+    ];
+
+    const data = assets.map(a => ({
+      inventoryNumber: a.inventoryNumber,
+      name: a.name,
+      category: a.category,
+      location: a.location,
+      initialValue: a.initialValue,
+      currentValue: a.currentValue,
+      status: a.status
+    }));
+
+    const filename = ExcelService.sanitizeFilename(`assets_${Date.now()}.xlsx`);
+    const buffer = await ExcelService.generateExcel(data, 'Assets', columns, filename, {
+      headerColor: '4CAF50',
+      numberColumns: ['initialValue', 'currentValue']
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
+  } catch (error) {
+    console.error('Excel error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 // 📊 HESABAT TƏFƏRRÜATLARI
 export const getReportDetails = async (req, res) => {
   try {
@@ -821,10 +919,10 @@ export const getAssetStats = async (req, res) => {
       {
         $group: {
           _id: null,
-          totalAssets: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
+          assetCount: { $sum: 1 },
+          totalValue: { $sum: "$initialValue" },
+          currentValue: { $sum: "$currentValue" },
+          depreciation: { $sum: "$amortization" },
           activeAssets: { 
             $sum: { $cond: [{ $eq: ["$status", "Aktiv"] }, 1, 0] }
           }
@@ -832,16 +930,16 @@ export const getAssetStats = async (req, res) => {
       }
     ]);
     
-    const statResult = stats[0] || {
-      totalAssets: 0,
-      totalInitialValue: 0,
-      totalCurrentValue: 0,
-      totalAmortization: 0,
+    const summary = stats[0] || {
+      assetCount: 0,
+      totalValue: 0,
+      currentValue: 0,
+      depreciation: 0,
       activeAssets: 0
     };
 
     // Kateqoriyalara görə qruplaşdırma
-    const categoryStats = await Asset.aggregate([
+    const byCategory = await Asset.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
@@ -850,11 +948,19 @@ export const getAssetStats = async (req, res) => {
           totalValue: { $sum: "$currentValue" }
         }
       },
-      { $sort: { totalValue: -1 } }
+      { $sort: { totalValue: -1 } },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          count: 1,
+          totalValue: 1
+        }
+      }
     ]);
 
     // Statuslara görə qruplaşdırma
-    const statusStats = await Asset.aggregate([
+    const byStatus = await Asset.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
@@ -862,11 +968,19 @@ export const getAssetStats = async (req, res) => {
           count: { $sum: 1 },
           totalValue: { $sum: "$currentValue" }
         }
+      },
+      {
+        $project: {
+          _id: 0,
+          status: "$_id",
+          count: 1,
+          totalValue: 1
+        }
       }
     ]);
 
     // Aylıq amortizasiya
-    const monthlyDepreciation = await Asset.aggregate([
+    const monthlyDepreciationResult = await Asset.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId), status: "Aktiv" } },
       {
         $group: {
@@ -880,13 +994,15 @@ export const getAssetStats = async (req, res) => {
       }
     ]);
 
+    const monthlyDepreciation = monthlyDepreciationResult[0]?.totalMonthlyDepreciation || 0;
+
     res.json({
       success: true,
       data: {
-        summary: statResult,
-        byCategory: categoryStats,
-        byStatus: statusStats,
-        monthlyDepreciation: monthlyDepreciation[0]?.totalMonthlyDepreciation || 0
+        summary,
+        byCategory,
+        byStatus,
+        monthlyDepreciation
       }
     });
   } catch (error) {
@@ -904,191 +1020,144 @@ export const createAsset = async (req, res) => {
     console.log('📋 Request Body Keys:', Object.keys(req.body));
     console.log('📋 Request Body Values:', req.body);
     
+    // Frontend-dən gələn sahələr (invNo, residualValue, warranty, branch, responsible, serialNo, depreciationMethod)
     const {
-      inventoryNumber,
+      invNo,                // inventar nömrəsi
       name,
       category,
       account,
-      location,
+      location,             // yer (əgər department yoxdursa backup)
       initialValue,
-      currentValue, // Frontend bura boş göndərsə, biz avtomatik hesablayacayıq
+      residualValue,        // cari dəyər (currentValue)
       purchaseDate,
-      serviceLife,
+      warranty,             // ay olaraq istifadə müddəti
       notes,
-      depreciationMethod,
-      warrantyExpiryDate,
-      nextMaintenanceDate,
-      supplier,
-      serialNumber,
-      barcode,
-      department,
-      responsiblePerson,
+      depreciationMethod,   // frontend metod adı (straightLine, decliningBalance, unitsOfProduction)
+      // Əlavə sahələr (frontend-də ola bilər, yoxdursa undefined)
+      supplier,             // frontend-də 'responsible' kimi gəlir? Aşağıda bax
+      serialNo,             // seriya nömrəsi
+      branch,               // şöbə adı (department adı)
+      responsiblePerson,    // məsul şəxs (əgər varsa)
       isInsured,
-      insuranceExpiryDate,
       tags
     } = req.body;
 
     // Validation check
     if (!account || account.trim() === '') {
-      console.log('❌ ERROR: Account is empty or missing');
       return res.status(400).json({
         success: false,
-        message: "Account sahəsi tələb olunur",
-        receivedBody: req.body,
-        missingFields: ['account']
+        message: "Account sahəsi tələb olunur"
       });
     }
 
     const userId = req.params.userId;
     
-    // İnitialValue parse et
+    // 1. Department ID-ni tap (əgər branch göndərilibsə)
+    let departmentId = null;
+    if (branch && branch.trim() !== '') {
+      const department = await Department.findOne({ 
+        userId, 
+        name: branch.trim(),
+        isActive: true 
+      }).select('_id');
+      if (department) {
+        departmentId = department._id;
+      } else {
+        console.log(`⚠️ Department "${branch}" tapılmadı, location kimi saxlanılacaq.`);
+        // departmentId null qalır, location istifadə olunacaq
+      }
+    }
+
+    // 2. Dəyərləri parse et
     const parsedInitialValue = parseFloat(initialValue) || 0;
+    const parsedResidualValue = parseFloat(residualValue) || undefined;
     
-    // ServiceLife parse et (minimum 5 il)
-    const parsedServiceLife = Math.max(parseInt(serviceLife) || 5, 5);
+    // 3. ServiceLife: warranty (ay) -> il
+    const warrantyMonths = parseInt(warranty) || 12; // default 12 ay
+    const parsedServiceLife = Math.ceil(warrantyMonths / 12); // ilə çevir, yuxarı yuvarla
+    // Minimum 1 il olsun (modeldə min 1)
+    const finalServiceLife = Math.max(parsedServiceLife, 1);
     
-    // PurchaseDate parse et
+    // 4. PurchaseDate
     const parsedPurchaseDate = purchaseDate ? new Date(purchaseDate) : new Date();
     
-    // ⭐ YENİ: İNDİKİ ZAMANA GÖRƏ AVTOMATİK HESABLAMA FUNKSİYASI
-    const calculateCurrentValueByTime = (initialVal, purchaseDt, serviceLifeYears) => {
-      const now = new Date();
-      const purchase = new Date(purchaseDt);
-      
-      // Keçən ayları hesabla (mənfi olmasın)
-      let monthsPassed = (now.getFullYear() - purchase.getFullYear()) * 12 + 
-                        (now.getMonth() - purchase.getMonth());
-      
-      // Əgər purchaseDate gələcəkdədirsə, 0 et
-      if (monthsPassed < 0) monthsPassed = 0;
-      
-      const totalMonths = serviceLifeYears * 12;
-      
-      // Əgər xidmət müddəti bitibsə
-      if (monthsPassed >= totalMonths) {
-        return {
-          currentValue: 0,
-          amortization: initialVal,
-          amortizationPercentage: 100,
-          status: "Sıradan çıxıb",
-          monthsPassed: monthsPassed
-        };
-      }
-      
-      // Düz xətt üsulu ilə hesabla (default)
-      const annualDepreciation = initialVal / serviceLifeYears;
-      const monthlyDepreciation = annualDepreciation / 12;
-      const totalDepreciation = monthlyDepreciation * monthsPassed;
-      
-      const currentVal = Math.max(0, initialVal - totalDepreciation);
-      const amortizationPerc = initialVal > 0 ? (totalDepreciation / initialVal) * 100 : 0;
-      
-      return {
-        currentValue: parseFloat(currentVal.toFixed(2)),
-        amortization: parseFloat(totalDepreciation.toFixed(2)),
-        amortizationPercentage: parseFloat(amortizationPerc.toFixed(2)),
-        status: currentVal > 0 ? "Aktiv" : "Sıradan çıxıb",
-        monthsPassed: monthsPassed
-      };
-    };
-    
-    // CURRENT VALUE LOGIC
+    // 5. Cari dəyər məntiqi (backend-dəki hesablama)
     let finalCurrentValue;
     let finalAmortization;
     let finalAmortizationPercentage;
     let finalStatus;
-    let calculationNote = "";
     
-    if (currentValue !== undefined && currentValue !== null && currentValue !== '') {
-      // Əgər frontend-dən currentValue göndərilibsə, onu istifadə et
-      finalCurrentValue = parseFloat(currentValue);
-      
-      // currentValue initialValue-dan böyük olmamalıdır
+    if (parsedResidualValue !== undefined && !isNaN(parsedResidualValue)) {
+      // Əgər frontend residualValue göndəribsə, onu istifadə et
+      finalCurrentValue = parsedResidualValue;
       if (finalCurrentValue > parsedInitialValue) {
-        console.log(`❌ ERROR: currentValue (${finalCurrentValue}) initialValue-dan (${parsedInitialValue}) böyük ola bilməz`);
         return res.status(400).json({
           success: false,
-          message: `Cari dəyər (${finalCurrentValue}) ilkin dəyərdən (${parsedInitialValue}) böyük ola bilməz`,
-          errorCode: 'CURRENT_VALUE_EXCEEDS_INITIAL',
-          initialValue: parsedInitialValue,
-          currentValue: finalCurrentValue
+          message: `Cari dəyər (${finalCurrentValue}) ilkin dəyərdən (${parsedInitialValue}) böyük ola bilməz`
         });
       }
-      
       finalAmortization = parsedInitialValue - finalCurrentValue;
-      finalAmortizationPercentage = parsedInitialValue > 0 ? 
-        (finalAmortization / parsedInitialValue) * 100 : 0;
+      finalAmortizationPercentage = parsedInitialValue > 0 ? (finalAmortization / parsedInitialValue) * 100 : 0;
       finalStatus = finalCurrentValue > 0 ? "Aktiv" : "Sıradan çıxıb";
-      calculationNote = "İstifadəçi tərəfindən daxil edildi";
-      
     } else {
-      // ⭐ ƏSAS YENİLİK: Frontend currentValue göndərməyibsə, İNDİKİ ZAMANA GÖRƏ AVTOMATİK HESABLA
-      const calculated = calculateCurrentValueByTime(
-        parsedInitialValue, 
-        parsedPurchaseDate, 
-        parsedServiceLife
-      );
-      
+      // Avtomatik hesabla (köhnə funksiya)
+      const calculated = calculateCurrentValueByTime(parsedInitialValue, parsedPurchaseDate, finalServiceLife);
       finalCurrentValue = calculated.currentValue;
       finalAmortization = calculated.amortization;
       finalAmortizationPercentage = calculated.amortizationPercentage;
       finalStatus = calculated.status;
-      calculationNote = `Avtomatik hesablandı (${calculated.monthsPassed} ay keçib)`;
-      
-      console.log(`🔄 currentValue avtomatik hesablandı:`, {
-        initialValue: parsedInitialValue,
-        purchaseDate: parsedPurchaseDate.toISOString().split('T')[0],
-        serviceLife: parsedServiceLife,
-        monthsPassed: calculated.monthsPassed,
-        calculatedCurrentValue: finalCurrentValue,
-        calculatedAmortization: finalAmortization,
-        calculatedPercentage: finalAmortizationPercentage,
-        calculatedStatus: finalStatus
-      });
     }
-    
+
+    // 6. Depreciation metodunu çevir
+    const backendDepreciationMethod = mapDepreciationMethodToBackend(depreciationMethod || 'straightLine');
+
+    // 7. Supplier: frontend-də 'responsible' ola bilər, yoxsa 'supplier'?
+    // Frontend formunda 'responsible' inputu var (təchizatçı). Onu 'supplier' kimi qəbul edirik.
+    const finalSupplier = req.body.responsible || supplier || '';
+
+    // 8. Serial number
+    const finalSerialNumber = serialNo || serialNumber || '';
+
+    // 9. Tags
+    let finalTags = [];
+    if (tags) {
+      finalTags = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim());
+    }
+
+    // Asset datasını yığ
     const assetData = {
       userId,
-      inventoryNumber: inventoryNumber || `INV_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      inventoryNumber: invNo || `INV_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: name?.trim(),
       category: category?.trim(),
       account: account?.trim(),
-      location: location?.trim(),
-      initialValue: parsedInitialValue,
-      currentValue: finalCurrentValue, // Hesablanmış dəyər
-      amortization: finalAmortization, // Hesablanmış amortizasiya
-      amortizationPercentage: finalAmortizationPercentage, // Hesablanmış faiz
-      status: finalStatus, // Hesablanmış status
-      purchaseDate: parsedPurchaseDate,
-      serviceLife: parsedServiceLife,
-      notes: notes?.trim(),
-      depreciationMethod: depreciationMethod || "Düz xətt",
-      warrantyExpiryDate: warrantyExpiryDate ? new Date(warrantyExpiryDate) : undefined,
-      nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : undefined,
-      supplier: supplier?.trim(),
-      serialNumber: serialNumber?.trim(),
-      barcode: barcode?.trim(),
-      department: department?.trim(),
-      responsiblePerson: responsiblePerson?.trim(),
-      isInsured: Boolean(isInsured),
-      insuranceExpiryDate: insuranceExpiryDate ? new Date(insuranceExpiryDate) : undefined,
-      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim())) : []
-    };
-
-    console.log('✅ Asset Data to save:', {
+      location: location?.trim(),  // əgər department yoxdursa, bu işə düşəcək
       initialValue: parsedInitialValue,
       currentValue: finalCurrentValue,
       amortization: finalAmortization,
       amortizationPercentage: finalAmortizationPercentage,
       status: finalStatus,
-      purchaseDate: parsedPurchaseDate.toISOString().split('T')[0],
-      serviceLife: parsedServiceLife,
-      calculationNote: calculationNote
-    });
-    
-    // Əgər fayl yüklənibsə
+      purchaseDate: parsedPurchaseDate,
+      serviceLife: finalServiceLife,
+      notes: notes?.trim(),
+      depreciationMethod: backendDepreciationMethod,
+      supplier: finalSupplier,
+      serialNumber: finalSerialNumber,
+      department: departmentId,  // ObjectId və ya null
+      responsiblePerson: responsiblePerson?.trim(),
+      isInsured: Boolean(isInsured),
+      tags: finalTags
+      // digər sahələr (warrantyExpiryDate, nextMaintenanceDate, barcode, insuranceExpiryDate) əgər frontenddən gəlirsə əlavə et
+    };
+
+    // Əgər frontenddən əlavə tarixlər gəlibsə, onları da əlavə et
+    if (req.body.warrantyExpiryDate) assetData.warrantyExpiryDate = new Date(req.body.warrantyExpiryDate);
+    if (req.body.nextMaintenanceDate) assetData.nextMaintenanceDate = new Date(req.body.nextMaintenanceDate);
+    if (req.body.insuranceExpiryDate) assetData.insuranceExpiryDate = new Date(req.body.insuranceExpiryDate);
+    if (req.body.barcode) assetData.barcode = req.body.barcode;
+
+    // Fayl yükləmə
     if (req.file) {
-      console.log('📁 File detected:', req.file.originalname);
       assetData.document = {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
@@ -1098,46 +1167,36 @@ export const createAsset = async (req, res) => {
       };
     }
 
-    console.log('💾 Saving to database...');
     const newAsset = await Asset.create(assetData);
     
-    console.log('✅ Asset saved successfully');
-    
-    // Buffer data-sını client-ə göndərmirik
-    const assetResponse = newAsset.toObject();
-    if (assetResponse.document && assetResponse.document.bufferData) {
-      delete assetResponse.document.bufferData;
-    }
+    // Cavabı frontend formatına çevir
+    const assetResponse = {
+      invNo: newAsset.inventoryNumber,
+      name: newAsset.name,
+      category: newAsset.category,
+      account: newAsset.account,
+      location: newAsset.department ? (await newAsset.populate('department', 'name')).department.name : newAsset.location,
+      initialValue: newAsset.initialValue,
+      currentValue: newAsset.currentValue,
+      status: newAsset.status,
+      // əlavə məlumatlar (əgər lazımdırsa)
+      id: newAsset._id
+    };
 
     res.status(201).json({
       success: true,
       data: assetResponse,
-      message: "Vəsait uğurla əlavə edildi",
-      calculationInfo: {
-        initialValue: parsedInitialValue,
-        currentValue: finalCurrentValue,
-        amortization: finalAmortization,
-        amortizationPercentage: finalAmortizationPercentage,
-        status: finalStatus,
-        purchaseDate: parsedPurchaseDate.toISOString().split('T')[0],
-        serviceLife: parsedServiceLife,
-        calculationNote: calculationNote,
-        isValid: finalCurrentValue <= parsedInitialValue,
-        note: "Cari dəyər ilkin dəyərdən böyük ola bilməz"
-      }
+      message: "Vəsait uğurla əlavə edildi"
     });
     
   } catch (error) {
-    console.error('❌ CREATE ASSET Error:', error.message);
-    console.error('❌ Error Stack:', error.stack);
+    console.error('❌ CREATE ASSET Error:', error);
     res.status(500).json({ 
       success: false,
-      message: error.message,
-      errorType: error.name
+      message: error.message
     });
   }
 };
-
 // 🏢 BÜTÜN VƏSAİTLƏRİ GƏTİR
 
 // 🏢 VƏSAİTİ ID İLƏ GƏTİR
@@ -1147,8 +1206,11 @@ export const getAssetById = async (req, res) => {
 
     const asset = await Asset.findOne({ 
       _id: assetId, 
-      userId 
-    }).select('-document.bufferData -__v');
+      userId,
+      isDeleted: false 
+    })
+    .populate('department', 'name')
+    .select('-document.bufferData -__v');
 
     if (!asset) {
       return res.status(404).json({ 
@@ -1157,9 +1219,32 @@ export const getAssetById = async (req, res) => {
       });
     }
 
+    // Frontend formatına çevir
+    const formattedAsset = {
+      invNo: asset.inventoryNumber,
+      name: asset.name,
+      category: asset.category,
+      account: asset.account,
+      location: asset.department?.name || asset.location || 'Müəyyən edilməyib',
+      initialValue: asset.initialValue,
+      currentValue: asset.currentValue,
+      status: asset.status,
+      // Əlavə məlumatlar (əgər frontend tələb edirsə)
+      purchaseDate: asset.purchaseDate,
+      serviceLife: asset.serviceLife,
+      depreciationMethod: asset.depreciationMethod,
+      serialNumber: asset.serialNumber,
+      supplier: asset.supplier,
+      notes: asset.notes,
+      departmentId: asset.department?._id,
+      responsiblePerson: asset.responsiblePerson,
+      warrantyExpiryDate: asset.warrantyExpiryDate,
+      isInsured: asset.isInsured
+    };
+
     res.json({
       success: true,
-      data: asset
+      data: formattedAsset
     });
   } catch (error) {
     console.error('❌ GET ASSET BY ID Error:', error);
@@ -1170,13 +1255,14 @@ export const getAssetById = async (req, res) => {
   }
 };
 
+
 // 🏢 VƏSAİTİ YENİLƏ
 export const updateAsset = async (req, res) => {
   try {
     const { userId, assetId } = req.params;
     
-    // Əvvəlcə asset-i tapırıq
-    const asset = await Asset.findOne({ _id: assetId, userId });
+    // Əvvəlcə asset-i tap
+    const asset = await Asset.findOne({ _id: assetId, userId, isDeleted: false });
     if (!asset) {
       return res.status(404).json({ 
         success: false,
@@ -1184,21 +1270,111 @@ export const updateAsset = async (req, res) => {
       });
     }
 
-    // Yeniləmə məlumatları
-    const updateData = { ...req.body };
+    // Frontend-dən gələn məlumatlar (yenə eyni formatda)
+    const {
+      invNo,
+      name,
+      category,
+      account,
+      location,
+      initialValue,
+      residualValue,
+      purchaseDate,
+      warranty,
+      notes,
+      depreciationMethod,
+      supplier,
+      serialNo,
+      branch,
+      responsiblePerson,
+      isInsured,
+      tags
+    } = req.body;
+
+    // Update datasını yığ
+    const updateData = {};
+
+    if (invNo !== undefined) updateData.inventoryNumber = invNo;
+    if (name !== undefined) updateData.name = name.trim();
+    if (category !== undefined) updateData.category = category.trim();
+    if (account !== undefined) updateData.account = account.trim();
+    if (location !== undefined) updateData.location = location.trim();
     
-    // Tarixləri düzgün formatla
-    if (updateData.purchaseDate) updateData.purchaseDate = new Date(updateData.purchaseDate);
-    if (updateData.warrantyExpiryDate) updateData.warrantyExpiryDate = new Date(updateData.warrantyExpiryDate);
-    if (updateData.nextMaintenanceDate) updateData.nextMaintenanceDate = new Date(updateData.nextMaintenanceDate);
-    if (updateData.insuranceExpiryDate) updateData.insuranceExpiryDate = new Date(updateData.insuranceExpiryDate);
+    // İlkin dəyər dəyişərsə, cari dəyəri yenidən hesablamaq olar, amma sadəcə qəbul edək
+    if (initialValue !== undefined) {
+      const parsedInitial = parseFloat(initialValue);
+      if (!isNaN(parsedInitial)) updateData.initialValue = parsedInitial;
+    }
     
-    // Tags-i array-ə çevir
-    if (updateData.tags && typeof updateData.tags === 'string') {
-      updateData.tags = updateData.tags.split(',').map(tag => tag.trim());
+    // Cari dəyər (residualValue)
+    if (residualValue !== undefined) {
+      const parsedResidual = parseFloat(residualValue);
+      if (!isNaN(parsedResidual)) {
+        updateData.currentValue = parsedResidual;
+        // Amortizasiyanı yenidən hesabla
+        const initial = updateData.initialValue !== undefined ? updateData.initialValue : asset.initialValue;
+        updateData.amortization = initial - parsedResidual;
+        updateData.amortizationPercentage = initial > 0 ? (updateData.amortization / initial) * 100 : 0;
+        updateData.status = parsedResidual > 0 ? "Aktiv" : "Sıradan çıxıb";
+      }
     }
 
-    // ✅ Əgər yeni fayl yüklənibsə
+    // Warranty (ay) -> serviceLife (il)
+    if (warranty !== undefined) {
+      const warrantyMonths = parseInt(warranty) || 12;
+      updateData.serviceLife = Math.ceil(warrantyMonths / 12);
+    }
+
+    if (purchaseDate) updateData.purchaseDate = new Date(purchaseDate);
+    if (notes !== undefined) updateData.notes = notes.trim();
+    
+    // Depreciation method
+    if (depreciationMethod !== undefined) {
+      updateData.depreciationMethod = mapDepreciationMethodToBackend(depreciationMethod);
+    }
+
+    // Supplier (frontend-də 'responsible' və ya 'supplier')
+    const finalSupplier = req.body.responsible || supplier;
+    if (finalSupplier !== undefined) updateData.supplier = finalSupplier.trim();
+
+    // Serial number
+    if (serialNo !== undefined) updateData.serialNumber = serialNo.trim();
+
+    // Department (branch adı -> ObjectId)
+    if (branch !== undefined) {
+      if (branch && branch.trim() !== '') {
+        const department = await Department.findOne({ 
+          userId, 
+          name: branch.trim(),
+          isActive: true 
+        }).select('_id');
+        if (department) {
+          updateData.department = department._id;
+          // location-u təmizləmək istəyiriksə, edə bilərik, amma saxlanıla da bilər
+        } else {
+          // Tapılmadısa, department-i null et, location olduğu kimi qalsın
+          updateData.department = null;
+        }
+      } else {
+        updateData.department = null;
+      }
+    }
+
+    if (responsiblePerson !== undefined) updateData.responsiblePerson = responsiblePerson.trim();
+    if (isInsured !== undefined) updateData.isInsured = Boolean(isInsured);
+
+    // Tags
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim());
+    }
+
+    // Tarixlər (əgər gəlibsə)
+    if (req.body.warrantyExpiryDate) updateData.warrantyExpiryDate = new Date(req.body.warrantyExpiryDate);
+    if (req.body.nextMaintenanceDate) updateData.nextMaintenanceDate = new Date(req.body.nextMaintenanceDate);
+    if (req.body.insuranceExpiryDate) updateData.insuranceExpiryDate = new Date(req.body.insuranceExpiryDate);
+    if (req.body.barcode) updateData.barcode = req.body.barcode;
+
+    // Fayl yükləmə
     if (req.file) {
       updateData.document = {
         originalName: req.file.originalname,
@@ -1214,13 +1390,27 @@ export const updateAsset = async (req, res) => {
       { _id: assetId, userId },
       updateData,
       { new: true, runValidators: true }
-    ).select('-document.bufferData -__v');
+    ).populate('department', 'name');
+
+    // Cavabı frontend formatına çevir
+    const assetResponse = {
+      invNo: updatedAsset.inventoryNumber,
+      name: updatedAsset.name,
+      category: updatedAsset.category,
+      account: updatedAsset.account,
+      location: updatedAsset.department?.name || updatedAsset.location,
+      initialValue: updatedAsset.initialValue,
+      currentValue: updatedAsset.currentValue,
+      status: updatedAsset.status,
+      id: updatedAsset._id
+    };
 
     res.json({
       success: true,
-      data: updatedAsset,
+      data: assetResponse,
       message: "Vəsait uğurla yeniləndi"
     });
+
   } catch (error) {
     console.error('❌ UPDATE ASSET Error:', error);
     res.status(500).json({ 
@@ -1263,7 +1453,42 @@ export const deleteAsset = async (req, res) => {
     });
   }
 };
+// controllers/assetController.js
 
+// 🗑️ Vəsaiti inventar nömrəsinə görə sil (frontend üçün)
+export const deleteAssetByInvNo = async (req, res) => {
+  try {
+    const { userId, invNo } = req.params;
+
+    const asset = await Asset.findOneAndDelete({ 
+      inventoryNumber: invNo, 
+      userId 
+    });
+
+    if (!asset) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Bu inventar nömrəsinə aid vəsait tapılmadı" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Vəsait uğurla silindi",
+      data: {
+        id: asset._id,
+        name: asset.name,
+        invNo: asset.inventoryNumber
+      }
+    });
+  } catch (error) {
+    console.error('❌ DELETE ASSET BY INVNO Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message
+    });
+  }
+};
 // 🏢 VƏSAİT SƏNƏD ƏMƏLİYYATLARI
 
 // Sənəd məlumatlarını gətir
@@ -1484,83 +1709,7 @@ export const downloadAssetDocument = async (req, res) => {
 
 // ===================== EXCEL EXPORT FUNKSİYALARI =====================
 
-// ✅ Bütün assetləri Excel formatında endir - DÜZƏLDİLMİŞ
-export const downloadAllAssetsExcel = async (req, res) => {
-  try {
-    console.log("🚀 Excel download başladı...");
-    
-    const userId = req.params.userId;
-    
-    const assets = await Asset.find({ userId })
-      .select('-document.bufferData -__v');
 
-    console.log(`📊 ${assets.length} asset tapıldı`);
-    
-    const workbook = new excel.Workbook();
-    const worksheet = workbook.addWorksheet('Assets');
-    
-    // Sütun başlıqları
-    worksheet.columns = [
-      { header: 'Inventory No', key: 'inventoryNumber', width: 20 },
-      { header: 'Name', key: 'name', width: 30 },
-      { header: 'Category', key: 'category', width: 20 },
-      { header: 'Location', key: 'location', width: 20 },
-      { header: 'Initial Value', key: 'initialValue', width: 15 },
-      { header: 'Current Value', key: 'currentValue', width: 15 },
-      { header: 'Status', key: 'status', width: 15 }
-    ];
-    
-    // Başlıq formatı
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true };
-    
-    // Məlumatları əlavə et
-    assets.forEach(asset => {
-      worksheet.addRow({
-        inventoryNumber: asset.inventoryNumber || '',
-        name: asset.name || '',
-        category: asset.category || '',
-        location: asset.location || '',
-        initialValue: asset.initialValue || 0,
-        currentValue: asset.currentValue || 0,
-        status: asset.status || 'Active'
-      });
-    });
-    
-    // Fayl adı
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `assets_${timestamp}.xlsx`;
-    
-    console.log(`📁 Fayl adı: ${filename}`);
-    
-    // Buffer yarat
-    const buffer = await workbook.xlsx.writeBuffer();
-    
-    console.log(`✅ Buffer hazırdır. Ölçü: ${buffer.length} bytes`);
-    
-    // Response header-ları
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
-    
-    console.log("📤 Excel faylı göndərilir...");
-    
-    // Buffer-ı göndər
-    res.end(buffer);
-    
-    console.log("🎉 Excel faylı uğurla göndərildi!");
-    
-  } catch (error) {
-    console.error('❌ Excel xətası:', error);
-    
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: `Excel xətası: ${error.message}`
-      });
-    }
-  }
-};
 
 // ===================== PDF EXPORT FUNKSİYALARI =====================
 
@@ -2707,505 +2856,89 @@ export const downloadFormattedAmortizationPDF = async (req, res) => {
 export const getAssetStatistics = async (req, res) => {
   try {
     const userId = req.params.userId;
-    console.log(`📊 Asset stats requested for user: ${userId}`);
+    const { fields = 'overview,byCategory,byStatus' } = req.query;
+    const requestedFields = fields.split(',').map(f => f.trim());
 
-    // 1. ÜMUMİ STATİSTİKALAR
-    const overallStats = await Asset.getUserAssetStats(userId);
-    
-    console.log("✅ Overall stats fetched:", overallStats);
+    console.log(`📊 Asset stats requested for user: ${userId}, fields: ${requestedFields}`);
 
-    // 2. KATEQORİYA ÜZRƏ STATİSTİKALAR
-    const categoryStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
-          averageAmortizationPercentage: { $avg: "$amortizationPercentage" }
-        }
-      },
-      { $sort: { totalCurrentValue: -1 } }
-    ]);
+    const responseData = { success: true, data: {}, metadata: {} };
 
-    console.log(`✅ Category stats fetched: ${categoryStats.length} categories`);
+    // Həmişə lazım olan əsas statistika (overview) – sürətli
+    if (requestedFields.includes('overview') || requestedFields.length === 0) {
+      const overallStats = await Asset.getUserAssetStats(userId);
+      responseData.data.overview = {
+        totalAssets: overallStats.totalAssets || 0,
+        totalInitialValue: parseFloat((overallStats.totalInitialValue || 0).toFixed(2)),
+        totalCurrentValue: parseFloat((overallStats.totalCurrentValue || 0).toFixed(2)),
+        totalAmortization: parseFloat((overallStats.totalAmortization || 0).toFixed(2)),
+        activeAssets: overallStats.activeAssets || 0,
+        passiveAssets: overallStats.passiveAssets || 0,
+        soldAssets: overallStats.soldAssets || 0,
+        averageAmortizationPercentage: overallStats.totalInitialValue > 0
+          ? parseFloat(((overallStats.totalAmortization / overallStats.totalInitialValue) * 100).toFixed(2))
+          : 0
+      };
+    }
 
-    // 3. STATUS ÜZRƏ STATİSTİKALAR
-    const statusStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
-
-    console.log(`✅ Status stats fetched: ${statusStats.length} statuses`);
-
-    // 4. ŞÖBƏ ÜZRƏ STATİSTİKALAR
-    const departmentStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: "$department",
-          count: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" }
-        }
-      },
-      { $sort: { totalCurrentValue: -1 } },
-      { $limit: 10 }
-    ]);
-
-    console.log(`✅ Department stats fetched: ${departmentStats.length} departments`);
-
-    // 5. YER ÜZRƏ STATİSTİKALAR
-    const locationStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          location: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: "$location",
-          count: { $sum: 1 },
-          totalCurrentValue: { $sum: "$currentValue" }
-        }
-      },
-      { $sort: { totalCurrentValue: -1 } },
-      { $limit: 10 }
-    ]);
-
-    console.log(`✅ Location stats fetched: ${locationStats.length} locations`);
-
-    // 6. SON 12 AY ÜZRƏ STATİSTİKALAR
-    const monthlyStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          purchaseDate: { $exists: true }
-        } 
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$purchaseDate" },
-            month: { $month: "$purchaseDate" }
-          },
-          count: { $sum: 1 },
-          totalValue: { $sum: "$initialValue" }
-        }
-      },
-      { $sort: { "_id.year": -1, "_id.month": -1 } },
-      { $limit: 12 }
-    ]);
-
-    console.log(`✅ Monthly stats fetched: ${monthlyStats.length} months`);
-
-    // 7. DƏYƏR ARALIĞI ÜZRƏ STATİSTİKALAR
-    const valueRangeStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $bucket: {
-          groupBy: "$currentValue",
-          boundaries: [0, 1000, 5000, 10000, 50000, 100000, 500000, 1000000],
-          default: "1000000+",
-          output: {
+    // Kateqoriya statistikası
+    if (requestedFields.includes('byCategory')) {
+      const categoryStats = await Asset.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+        { $group: {
+            _id: "$category",
             count: { $sum: 1 },
-            totalValue: { $sum: "$currentValue" }
-          }
-        }
-      }
-    ]);
+            totalInitialValue: { $sum: "$initialValue" },
+            totalCurrentValue: { $sum: "$currentValue" },
+            totalAmortization: { $sum: "$amortization" },
+            averageAmortizationPercentage: { $avg: "$amortizationPercentage" }
+        } },
+        { $sort: { totalCurrentValue: -1 } }
+      ]);
+      responseData.data.byCategory = categoryStats.map(cat => ({
+        category: cat._id || 'Müəyyən edilməyib',
+        count: cat.count,
+        totalInitialValue: parseFloat((cat.totalInitialValue || 0).toFixed(2)),
+        totalCurrentValue: parseFloat((cat.totalCurrentValue || 0).toFixed(2)),
+        totalAmortization: parseFloat((cat.totalAmortization || 0).toFixed(2)),
+        averageAmortizationPercentage: parseFloat((cat.averageAmortizationPercentage || 0).toFixed(2))
+      }));
+    }
 
-    console.log(`✅ Value range stats fetched: ${valueRangeStats.length} ranges`);
+    // Status statistikası
+    if (requestedFields.includes('byStatus')) {
+      const statusStats = await Asset.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+        { $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+            totalInitialValue: { $sum: "$initialValue" },
+            totalCurrentValue: { $sum: "$currentValue" },
+            totalAmortization: { $sum: "$amortization" }
+        } }
+      ]);
+      responseData.data.byStatus = statusStats.map(stat => ({
+        status: stat._id || 'Müəyyən edilməyib',
+        count: stat.count,
+        totalInitialValue: parseFloat((stat.totalInitialValue || 0).toFixed(2)),
+        totalCurrentValue: parseFloat((stat.totalCurrentValue || 0).toFixed(2)),
+        totalAmortization: parseFloat((stat.totalAmortization || 0).toFixed(2))
+      }));
+    }
 
-    // 8. SON 30 GÜNDƏ ƏLAVƏ EDİLƏNLƏR
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentAdditions = await Asset.countDocuments({
-      userId,
-      isDeleted: false,
-      createdAt: { $gte: thirtyDaysAgo }
-    });
-
-    console.log(`✅ Recent additions: ${recentAdditions}`);
-
-    // 9. ORTA AMORTİZASİYA MÜDDƏTLƏRİ
-    const amortizationStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          serviceLife: { $gt: 0 }
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          avgServiceLife: { $avg: "$serviceLife" },
-          maxServiceLife: { $max: "$serviceLife" },
-          minServiceLife: { $min: "$serviceLife" },
-          totalRemainingLife: { $sum: "$remainingLife" }
-        }
-      }
-    ]);
-
-    console.log(`✅ Amortization stats fetched`);
-
-    // 10. SƏNƏD OLMAYAN VƏSAİTLƏR
-    const assetsWithoutDocument = await Asset.countDocuments({
-      userId,
-      isDeleted: false,
-      $or: [
-        { document: { $exists: false } },
-        { document: null },
-        { "document.originalName": { $exists: false } }
-      ]
-    });
-
-    console.log(`✅ Assets without document: ${assetsWithoutDocument}`);
-
-    // 11. BÖYÜK VƏSİTƏLƏR (Ən dəyərli 5 vəsait)
-    const topValuableAssets = await Asset.find({
-      userId,
-      isDeleted: false
-    })
-    .select('name inventoryNumber category currentValue amortizationPercentage status purchaseDate')
-    .sort({ currentValue: -1 })
-    .limit(5)
-    .lean();
-
-    console.log(`✅ Top valuable assets: ${topValuableAssets.length}`);
-
-    // 12. SON AMORTİZASİYA TARİXLƏRİ
-    const lastAmortizationUpdate = await Asset.findOne({
-      userId,
-      isDeleted: false
-    })
-    .sort({ updatedAt: -1 })
-    .select('updatedAt name')
-    .lean();
-
-    // 13. İLLƏR ÜZRƏ AMORTİZASİYA TENDENSİYASI
-    const yearlyAmortization = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          purchaseDate: { $exists: true }
-        } 
-      },
-      {
-        $group: {
-          _id: { $year: "$purchaseDate" },
-          count: { $sum: 1 },
-          avgAmortizationPercentage: { $avg: "$amortizationPercentage" },
-          totalAmortization: { $sum: "$amortization" }
-        }
-      },
-      { $sort: { "_id": -1 } }
-    ]);
-
-    console.log(`✅ Yearly amortization stats: ${yearlyAmortization.length} years`);
-
-    // 14. DEPRESİYASIYA METODU ÜZRƏ STATİSTİKA
-    const depreciationMethodStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: "$depreciationMethod",
-          count: { $sum: 1 },
-          totalValue: { $sum: "$currentValue" }
-        }
-      }
-    ]);
-
-    console.log(`✅ Depreciation method stats: ${depreciationMethodStats.length}`);
-
-    // 15. SİGORTA VƏ ZƏMANƏT STATİSTİKALARI
-    const insuranceStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          insuredCount: { 
-            $sum: { $cond: [{ $eq: ["$isInsured", true] }, 1, 0] } 
-          },
-          warrantyActiveCount: { 
-            $sum: { 
-              $cond: [{
-                $and: [
-                  { $ne: ["$warrantyExpiryDate", null] },
-                  { $gte: ["$warrantyExpiryDate", new Date()] }
-                ]
-              }, 1, 0] 
-            } 
-          },
-          insuranceExpiringSoonCount: { 
-            $sum: { 
-              $cond: [{
-                $and: [
-                  { $ne: ["$insuranceExpiryDate", null] },
-                  { $gte: ["$insuranceExpiryDate", new Date()] },
-                  { $lte: ["$insuranceExpiryDate", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)] }
-                ]
-              }, 1, 0] 
-            } 
-          }
-        }
-      }
-    ]);
-
-    console.log(`✅ Insurance stats fetched`);
-
-    // 16. TƏMİR VƏ BAXIM STATİSTİKALARI
-    const maintenanceStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          maintenanceDueCount: { 
-            $sum: { 
-              $cond: [{
-                $and: [
-                  { $ne: ["$nextMaintenanceDate", null] },
-                  { $lte: ["$nextMaintenanceDate", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)] }
-                ]
-              }, 1, 0] 
-            } 
-          },
-          totalMaintenanceCost: { $sum: "$maintenanceCost" }
-        }
-      }
-    ]);
-
-    console.log(`✅ Maintenance stats fetched`);
-
-    // RESPONSE DATA STRUCTURE
-    const responseData = {
-      success: true,
-      data: {
-        timestamp: new Date().toISOString(),
-        
-        // Ümumi statistika
-        overview: {
-          totalAssets: overallStats.totalAssets || 0,
-          totalInitialValue: parseFloat(overallStats.totalInitialValue?.toFixed(2)) || 0,
-          totalCurrentValue: parseFloat(overallStats.totalCurrentValue?.toFixed(2)) || 0,
-          totalAmortization: parseFloat(overallStats.totalAmortization?.toFixed(2)) || 0,
-          totalMaintenanceCost: parseFloat(overallStats.totalMaintenanceCost?.toFixed(2)) || 0,
-          activeAssets: overallStats.activeAssets || 0,
-          passiveAssets: overallStats.passiveAssets || 0,
-          soldAssets: overallStats.soldAssets || 0,
-          averageAmortizationPercentage: overallStats.totalInitialValue > 0 
-            ? parseFloat(((overallStats.totalAmortization / overallStats.totalInitialValue) * 100).toFixed(2))
-            : 0
-        },
-
-        // Kateqoriya üzrə
-        byCategory: categoryStats.map(cat => ({
-          category: cat._id || 'Müəyyən edilməyib',
-          count: cat.count,
-          totalInitialValue: parseFloat(cat.totalInitialValue?.toFixed(2)) || 0,
-          totalCurrentValue: parseFloat(cat.totalCurrentValue?.toFixed(2)) || 0,
-          totalAmortization: parseFloat(cat.totalAmortization?.toFixed(2)) || 0,
-          averageAmortizationPercentage: parseFloat(cat.averageAmortizationPercentage?.toFixed(2)) || 0,
-          percentageOfTotal: overallStats.totalCurrentValue > 0 
-            ? parseFloat(((cat.totalCurrentValue / overallStats.totalCurrentValue) * 100).toFixed(2))
-            : 0
-        })),
-
-        // Status üzrə
-        byStatus: statusStats.map(stat => ({
-          status: stat._id || 'Müəyyən edilməyib',
-          count: stat.count,
-          totalInitialValue: parseFloat(stat.totalInitialValue?.toFixed(2)) || 0,
-          totalCurrentValue: parseFloat(stat.totalCurrentValue?.toFixed(2)) || 0,
-          totalAmortization: parseFloat(stat.totalAmortization?.toFixed(2)) || 0
-        })),
-
-        // Şöbə üzrə
-        byDepartment: departmentStats.map(dept => ({
-          department: dept._id || 'Müəyyən edilməyib',
-          count: dept.count,
-          totalInitialValue: parseFloat(dept.totalInitialValue?.toFixed(2)) || 0,
-          totalCurrentValue: parseFloat(dept.totalCurrentValue?.toFixed(2)) || 0,
-          totalAmortization: parseFloat(dept.totalAmortization?.toFixed(2)) || 0
-        })),
-
-        // Yer üzrə
-        byLocation: locationStats.map(loc => ({
-          location: loc._id || 'Müəyyən edilməyib',
-          count: loc.count,
-          totalCurrentValue: parseFloat(loc.totalCurrentValue?.toFixed(2)) || 0
-        })),
-
-        // Aylıq statistikalar
-        monthlyTrends: monthlyStats.map(month => ({
-          year: month._id.year,
-          month: month._id.month,
-          count: month.count,
-          totalValue: parseFloat(month.totalValue?.toFixed(2)) || 0
-        })),
-
-        // Dəyər aralığı üzrə
-        byValueRange: valueRangeStats.map(range => ({
-          range: range._id,
-          count: range.count,
-          totalValue: parseFloat(range.totalValue?.toFixed(2)) || 0
-        })),
-
-        // Aktivlik statistikaları
-        activity: {
-          recentAdditions: recentAdditions,
-          lastAmortizationUpdate: lastAmortizationUpdate?.updatedAt || null,
-          lastUpdatedAsset: lastAmortizationUpdate?.name || null
-        },
-
-        // Amortizasiya statistikaları
-        amortizationAnalysis: {
-          avgServiceLife: amortizationStats[0]?.avgServiceLife 
-            ? parseFloat(amortizationStats[0].avgServiceLife.toFixed(1)) 
-            : 0,
-          maxServiceLife: amortizationStats[0]?.maxServiceLife || 0,
-          minServiceLife: amortizationStats[0]?.minServiceLife || 0,
-          totalRemainingLife: amortizationStats[0]?.totalRemainingLife || 0,
-          assetsWithoutDocument: assetsWithoutDocument,
-          percentageWithDocument: overallStats.totalAssets > 0 
-            ? parseFloat(((overallStats.totalAssets - assetsWithoutDocument) / overallStats.totalAssets * 100).toFixed(2))
-            : 0
-        },
-
-        // Ən dəyərli vəsaitlər
-        topValuableAssets: topValuableAssets.map(asset => ({
-          name: asset.name,
-          inventoryNumber: asset.inventoryNumber,
-          category: asset.category,
-          currentValue: parseFloat(asset.currentValue?.toFixed(2)) || 0,
-          amortizationPercentage: parseFloat(asset.amortizationPercentage?.toFixed(2)) || 0,
-          status: asset.status,
-          purchaseDate: asset.purchaseDate
-        })),
-
-        // İllər üzrə amortizasiya
-        yearlyAmortizationTrend: yearlyAmortization.map(year => ({
-          year: year._id,
-          count: year.count,
-          avgAmortizationPercentage: parseFloat(year.avgAmortizationPercentage?.toFixed(2)) || 0,
-          totalAmortization: parseFloat(year.totalAmortization?.toFixed(2)) || 0
-        })),
-
-        // Depresiyasiya metodu üzrə
-        byDepreciationMethod: depreciationMethodStats.map(method => ({
-          method: method._id || 'Düz xətt',
-          count: method.count,
-          totalValue: parseFloat(method.totalValue?.toFixed(2)) || 0
-        })),
-
-        // Təhlükəsizlik statistikaları
-        securityStats: {
-          insuredAssets: insuranceStats[0]?.insuredCount || 0,
-          warrantyActiveAssets: insuranceStats[0]?.warrantyActiveCount || 0,
-          insuranceExpiringSoon: insuranceStats[0]?.insuranceExpiringSoonCount || 0,
-          maintenanceDueAssets: maintenanceStats[0]?.maintenanceDueCount || 0,
-          totalMaintenanceCost: parseFloat(maintenanceStats[0]?.totalMaintenanceCost?.toFixed(2)) || 0
-        },
-
-        // Performans göstəriciləri
-        performanceMetrics: {
-          valueRetentionRate: overallStats.totalInitialValue > 0 
-            ? parseFloat((overallStats.totalCurrentValue / overallStats.totalInitialValue * 100).toFixed(2))
-            : 0,
-          amortizationRate: overallStats.totalInitialValue > 0 
-            ? parseFloat((overallStats.totalAmortization / overallStats.totalInitialValue * 100).toFixed(2))
-            : 0,
-          annualDepreciation: overallStats.totalAssets > 0 
-            ? parseFloat((overallStats.totalAmortization / amortizationStats[0]?.avgServiceLife).toFixed(2))
-            : 0,
-          averageAssetValue: overallStats.totalAssets > 0 
-            ? parseFloat((overallStats.totalCurrentValue / overallStats.totalAssets).toFixed(2))
-            : 0
-        }
-      },
-      metadata: {
-        generatedAt: new Date().toISOString(),
-        timezone: 'Asia/Baku',
-        dataPoints: {
-          categories: categoryStats.length,
-          statuses: statusStats.length,
-          departments: departmentStats.length,
-          locations: locationStats.length,
-          months: monthlyStats.length,
-          valueRanges: valueRangeStats.length
-        }
-      }
+    // Metadata (həmişə əlavə et)
+    responseData.metadata = {
+      generatedAt: new Date().toISOString(),
+      fields: requestedFields
     };
 
     console.log("✅ Asset statistics prepared successfully");
-    
     res.json(responseData);
 
   } catch (error) {
     console.error('❌ GET ASSET STATISTICS Error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: error.message,
-      errorType: error.name,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // 📊 SADƏ VERSİYA (Daha sürətli)
 export const getSimpleAssetStatistics = async (req, res) => {
   try {
@@ -3277,544 +3010,252 @@ export const getSimpleAssetStatistics = async (req, res) => {
 
 
 // 📊 ŞÖBƏ DƏYƏRLƏRİNİ GƏTİR
+// controllers/departmentController.js (optimallaşdırılmış)
 export const getDepartmentValues = async (req, res) => {
   try {
     const userId = req.params.userId;
-    console.log(`📊 Department values requested for user: ${userId}`);
 
-    // 1. ŞÖBƏLƏR ÜZRƏ ÜMUMİ STATİSTİKALAR
-    const departmentStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false
-        } 
-      },
+    const pipeline = [
+      { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: false } },
       {
-        $group: {
-          _id: {
-            $ifNull: ["$department", "Müəyyən edilməyib"]
-          },
-          assetCount: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
-          avgAmortizationPercentage: { $avg: "$amortizationPercentage" },
-          maintenanceCost: { $sum: "$maintenanceCost" },
-          insuranceAmount: { $sum: "$insuranceAmount" }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          assetCount: 1,
-          totalInitialValue: { $round: ["$totalInitialValue", 2] },
-          totalCurrentValue: { $round: ["$totalCurrentValue", 2] },
-          totalAmortization: { $round: ["$totalAmortization", 2] },
-          avgAmortizationPercentage: { $round: ["$avgAmortizationPercentage", 2] },
-          maintenanceCost: { $round: ["$maintenanceCost", 2] },
-          insuranceAmount: { $round: ["$insuranceAmount", 2] },
-          _id: 0
-        }
-      },
-      { $sort: { totalCurrentValue: -1 } }
-    ]);
-
-    console.log(`✅ Department stats fetched: ${departmentStats.length} departments`);
-
-    // 2. ÜMUMİ DƏYƏRLƏR
-    const overallStats = await Asset.getUserAssetStats(userId);
-
-    // 3. FAALİYYƏT GÖSTƏRİCİLƏRİ
-    const activityStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: "$department",
-          recentAssetsCount: {
-            $sum: {
-              $cond: [
-                {
-                  $gte: ["$createdAt", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)]
-                },
-                1,
-                0
-              ]
+        $facet: {
+          // 1. Department statistikaları
+          departmentStats: [
+            {
+              $group: {
+                _id: { $ifNull: ["$department", "Müəyyən edilməyib"] },
+                assetCount: { $sum: 1 },
+                totalInitialValue: { $sum: "$initialValue" },
+                totalCurrentValue: { $sum: "$currentValue" },
+                totalAmortization: { $sum: "$amortization" },
+                avgAmortizationPercentage: { $avg: "$amortizationPercentage" },
+                maintenanceCost: { $sum: "$maintenanceCost" },
+                insuranceAmount: { $sum: "$insuranceAmount" }
+              }
+            },
+            {
+              $project: {
+                department: "$_id",
+                assetCount: 1,
+                totalInitialValue: { $round: ["$totalInitialValue", 2] },
+                totalCurrentValue: { $round: ["$totalCurrentValue", 2] },
+                totalAmortization: { $round: ["$totalAmortization", 2] },
+                avgAmortizationPercentage: { $round: ["$avgAmortizationPercentage", 2] },
+                maintenanceCost: { $round: ["$maintenanceCost", 2] },
+                insuranceAmount: { $round: ["$insuranceAmount", 2] },
+                _id: 0
+              }
             }
-          },
-          maintenanceDueCount: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $ne: ["$nextMaintenanceDate", null] },
-                    { $lte: ["$nextMaintenanceDate", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)] }
+          ],
+
+          // 2. Aktivlik statistikaları
+          activityStats: [
+            {
+              $group: {
+                _id: { $ifNull: ["$department", "Müəyyən edilməyib"] },
+                recentAssetsCount: {
+                  $sum: {
+                    $cond: [
+                      { $gte: ["$createdAt", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)] },
+                      1,
+                      0
+                    ]
+                  }
+                },
+                maintenanceDueCount: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $ne: ["$nextMaintenanceDate", null] },
+                          { $lte: ["$nextMaintenanceDate", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)] }
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  }
+                },
+                warrantyActiveCount: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $ne: ["$warrantyExpiryDate", null] },
+                          { $gte: ["$warrantyExpiryDate", new Date()] }
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+
+          // 3. Kateqoriya paylanması
+          categoryStats: [
+            {
+              $match: {
+                department: { $exists: true, $ne: "" },
+                category: { $exists: true, $ne: "" }
+              }
+            },
+            {
+              $group: {
+                _id: {
+                  department: "$department",
+                  category: "$category"
+                },
+                count: { $sum: 1 },
+                totalValue: { $sum: "$currentValue" }
+              }
+            },
+            {
+              $group: {
+                _id: "$_id.department",
+                categories: {
+                  $push: {
+                    category: "$_id.category",
+                    count: "$count",
+                    totalValue: "$totalValue"
+                  }
+                },
+                totalCategories: { $sum: 1 }
+              }
+            }
+          ],
+
+          // 4. Məsul şəxslər
+          personnelStats: [
+            {
+              $match: {
+                department: { $exists: true, $ne: "" },
+                responsiblePerson: { $exists: true, $ne: "" }
+              }
+            },
+            {
+              $group: {
+                _id: {
+                  department: "$department",
+                  responsiblePerson: "$responsiblePerson"
+                },
+                assetCount: { $sum: 1 },
+                totalValue: { $sum: "$currentValue" }
+              }
+            },
+            {
+              $group: {
+                _id: "$_id.department",
+                personnel: {
+                  $push: {
+                    responsiblePerson: "$_id.responsiblePerson",
+                    assetCount: "$assetCount",
+                    totalValue: "$totalValue"
+                  }
+                },
+                totalPersonnel: { $sum: 1 }
+              }
+            }
+          ],
+
+          // 5. Yaş analizi
+          ageStats: [
+            {
+              $match: {
+                department: { $exists: true, $ne: "" },
+                purchaseDate: { $exists: true }
+              }
+            },
+            {
+              $addFields: {
+                assetAgeInYears: {
+                  $divide: [
+                    { $subtract: [new Date(), "$purchaseDate"] },
+                    1000 * 60 * 60 * 24 * 365
                   ]
-                },
-                1,
-                0
-              ]
+                }
+              }
+            },
+            {
+              $group: {
+                _id: "$department",
+                avgAssetAge: { $avg: "$assetAgeInYears" },
+                oldestAssetAge: { $max: "$assetAgeInYears" },
+                newestAssetAge: { $min: "$assetAgeInYears" },
+                assetCount: { $sum: 1 }
+              }
             }
-          },
-          warrantyActiveCount: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $ne: ["$warrantyExpiryDate", null] },
-                    { $gte: ["$warrantyExpiryDate", new Date()] }
-                  ]
-                },
-                1,
-                0
-              ]
+          ],
+
+          // 6. Ümumi statistika
+          overallStats: [
+            {
+              $group: {
+                _id: null,
+                totalAssets: { $sum: 1 },
+                totalCurrentValue: { $sum: "$currentValue" }
+              }
             }
-          }
+          ]
         }
       }
-    ]);
+    ];
 
-    console.log(`✅ Activity stats fetched: ${activityStats.length} departments`);
+    const result = await Asset.aggregate(pipeline);
+    const data = result[0] || {};
 
-    // 4. ŞÖBƏLƏR ÜZRƏ KATEQORİYA PAYLANMASI
-    const departmentCategoryStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" },
-          category: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: {
-            department: "$department",
-            category: "$category"
-          },
-          count: { $sum: 1 },
-          totalValue: { $sum: "$currentValue" }
-        }
-      },
-      {
-        $group: {
-          _id: "$_id.department",
-          categories: {
-            $push: {
-              category: "$_id.category",
-              count: "$count",
-              totalValue: "$totalValue"
-            }
-          },
-          totalCategories: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          categories: { $slice: ["$categories", 5] }, // İlk 5 kateqoriya
-          totalCategories: 1,
-          _id: 0
-        }
-      }
-    ]);
+    // Məlumatları birləşdir və formatla
+    const departmentStats = data.departmentStats || [];
+    const activityStats = data.activityStats || [];
+    const categoryStats = data.categoryStats || [];
+    const personnelStats = data.personnelStats || [];
+    const ageStats = data.ageStats || [];
+    const overall = data.overallStats?.[0] || { totalAssets: 0, totalCurrentValue: 0 };
 
-    console.log(`✅ Department category stats fetched: ${departmentCategoryStats.length} departments`);
+    // Department məlumatlarını birləşdir
+    const departments = departmentStats.map(dept => {
+      const activity = activityStats.find(a => a._id === dept.department) || {};
+      const category = categoryStats.find(c => c._id === dept.department) || {};
+      const personnel = personnelStats.find(p => p._id === dept.department) || {};
+      const age = ageStats.find(a => a._id === dept.department) || {};
 
-    // 5. ŞÖBƏLƏR ÜZRƏ MƏSUL ŞƏXSLƏR
-    const departmentPersonnelStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" },
-          responsiblePerson: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: {
-            department: "$department",
-            responsiblePerson: "$responsiblePerson"
-          },
-          assetCount: { $sum: 1 },
-          totalValue: { $sum: "$currentValue" }
-        }
-      },
-      {
-        $group: {
-          _id: "$_id.department",
-          personnel: {
-            $push: {
-              responsiblePerson: "$_id.responsiblePerson",
-              assetCount: "$assetCount",
-              totalValue: "$totalValue"
-            }
-          },
-          totalPersonnel: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          personnel: { $slice: ["$personnel", 5] }, // İlk 5 şəxs
-          totalPersonnel: 1,
-          _id: 0
-        }
-      }
-    ]);
+      return {
+        ...dept,
+        activity: {
+          recentAssetsCount: activity.recentAssetsCount || 0,
+          maintenanceDueCount: activity.maintenanceDueCount || 0,
+          warrantyActiveCount: activity.warrantyActiveCount || 0
+        },
+        categories: category.categories?.slice(0, 5) || [],
+        personnel: personnel.personnel?.slice(0, 5) || [],
+        ageAnalysis: {
+          avgAssetAge: age.avgAssetAge || 0,
+          oldestAssetAge: age.oldestAssetAge || 0,
+          newestAssetAge: age.newestAssetAge || 0
+        },
+        percentageOfTotal: overall.totalCurrentValue > 0
+          ? parseFloat(((dept.totalCurrentValue / overall.totalCurrentValue) * 100).toFixed(2))
+          : 0
+      };
+    });
 
-    console.log(`✅ Department personnel stats fetched: ${departmentPersonnelStats.length} departments`);
-
-    // 6. ŞÖBƏLƏR ÜZRƏ VƏSİTƏ YAŞI ANALİZİ
-    const departmentAgeStats = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" },
-          purchaseDate: { $exists: true }
-        } 
-      },
-      {
-        $addFields: {
-          assetAgeInYears: {
-            $divide: [
-              {
-                $subtract: [new Date(), "$purchaseDate"]
-              },
-              1000 * 60 * 60 * 24 * 365
-            ]
-          }
-        }
-      },
-      {
-        $group: {
-          _id: "$department",
-          avgAssetAge: { $avg: "$assetAgeInYears" },
-          oldestAssetAge: { $max: "$assetAgeInYears" },
-          newestAssetAge: { $min: "$assetAgeInYears" },
-          assetCount: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          avgAssetAge: { $round: ["$avgAssetAge", 1] },
-          oldestAssetAge: { $round: ["$oldestAssetAge", 1] },
-          newestAssetAge: { $round: ["$newestAssetAge", 1] },
-          assetCount: 1,
-          _id: 0
-        }
-      },
-      { $sort: { avgAssetAge: -1 } }
-    ]);
-
-    console.log(`✅ Department age stats fetched: ${departmentAgeStats.length} departments`);
-
-    // 7. ŞÖBƏLƏR ÜZRƏ SON 12 AY FAALİYYƏTİ
-    const last12Months = new Date();
-    last12Months.setMonth(last12Months.getMonth() - 12);
-
-    const departmentMonthlyActivity = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" },
-          createdAt: { $gte: last12Months }
-        } 
-      },
-      {
-        $group: {
-          _id: {
-            department: "$department",
-            year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
-          },
-          assetCount: { $sum: 1 },
-          totalValue: { $sum: "$initialValue" }
-        }
-      },
-      {
-        $group: {
-          _id: "$_id.department",
-          monthlyActivity: {
-            $push: {
-              year: "$_id.year",
-              month: "$_id.month",
-              assetCount: "$assetCount",
-              totalValue: "$totalValue"
-            }
-          },
-          totalAdditions: { $sum: "$assetCount" }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          monthlyActivity: { $slice: ["$monthlyActivity", 6] }, // Son 6 ay
-          totalAdditions: 1,
-          _id: 0
-        }
-      }
-    ]);
-
-    console.log(`✅ Department monthly activity fetched: ${departmentMonthlyActivity.length} departments`);
-
-    // 8. ŞÖBƏLƏR ÜZRƏ PERFORMANS GÖSTƏRİCİLƏRİ
-    const departmentPerformance = await Asset.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false,
-          department: { $exists: true, $ne: "" }
-        } 
-      },
-      {
-        $group: {
-          _id: "$department",
-          assetCount: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
-          maintenanceCost: { $sum: "$maintenanceCost" }
-        }
-      },
-      {
-        $project: {
-          department: "$_id",
-          assetCount: 1,
-          totalInitialValue: { $round: ["$totalInitialValue", 2] },
-          totalCurrentValue: { $round: ["$totalCurrentValue", 2] },
-          totalAmortization: { $round: ["$totalAmortization", 2] },
-          maintenanceCost: { $round: ["$maintenanceCost", 2] },
-          valueRetentionRate: {
-            $cond: [
-              { $eq: ["$totalInitialValue", 0] },
-              0,
-              { $round: [{ $multiply: [{ $divide: ["$totalCurrentValue", "$totalInitialValue"] }, 100] }, 2] }
-            ]
-          },
-          amortizationRate: {
-            $cond: [
-              { $eq: ["$totalInitialValue", 0] },
-              0,
-              { $round: [{ $multiply: [{ $divide: ["$totalAmortization", "$totalInitialValue"] }, 100] }, 2] }
-            ]
-          },
-          maintenanceRate: {
-            $cond: [
-              { $eq: ["$totalCurrentValue", 0] },
-              0,
-              { $round: [{ $multiply: [{ $divide: ["$maintenanceCost", "$totalCurrentValue"] }, 100] }, 2] }
-            ]
-          },
-          avgAssetValue: {
-            $cond: [
-              { $eq: ["$assetCount", 0] },
-              0,
-              { $round: [{ $divide: ["$totalCurrentValue", "$assetCount"] }, 2] }
-            ]
-          },
-          _id: 0
-        }
-      },
-      { $sort: { totalCurrentValue: -1 } }
-    ]);
-
-    console.log(`✅ Department performance stats fetched: ${departmentPerformance.length} departments`);
-
-    // 9. RESPONSE DATA STRUCTURE
-    const responseData = {
+    res.json({
       success: true,
       data: {
-        timestamp: new Date().toISOString(),
-        
-        // Ümumi statistika
-        overview: {
-          totalDepartments: departmentStats.length,
-          totalAssets: overallStats.totalAssets || 0,
-          totalValue: parseFloat(overallStats.totalCurrentValue?.toFixed(2)) || 0,
-          averageAssetsPerDepartment: departmentStats.length > 0 
-            ? parseFloat((overallStats.totalAssets / departmentStats.length).toFixed(1))
-            : 0,
-          departmentsWithAssets: departmentStats.filter(d => d.assetCount > 0).length,
-          undefinedDepartmentAssets: departmentStats.find(d => d.department === "Müəyyən edilməyib")?.assetCount || 0
-        },
-
-        // Şöbə üzrə statistikalar
-        departments: departmentStats.map(dept => {
-          const activity = activityStats.find(a => a._id === dept.department);
-          const category = departmentCategoryStats.find(c => c.department === dept.department);
-          const personnel = departmentPersonnelStats.find(p => p.department === dept.department);
-          const age = departmentAgeStats.find(a => a.department === dept.department);
-          const monthly = departmentMonthlyActivity.find(m => m.department === dept.department);
-          const performance = departmentPerformance.find(p => p.department === dept.department);
-
-          return {
-            // Əsas məlumatlar
-            department: dept.department,
-            assetCount: dept.assetCount,
-            financials: {
-              initialValue: dept.totalInitialValue,
-              currentValue: dept.totalCurrentValue,
-              amortization: dept.totalAmortization,
-              maintenanceCost: dept.maintenanceCost,
-              insuranceAmount: dept.insuranceAmount,
-              valueRetentionRate: performance?.valueRetentionRate || 0,
-              amortizationRate: performance?.amortizationRate || 0
-            },
-
-            // Performans göstəriciləri
-            performanceMetrics: {
-              avgAmortizationPercentage: dept.avgAmortizationPercentage || 0,
-              avgAssetValue: performance?.avgAssetValue || 0,
-              maintenanceRate: performance?.maintenanceRate || 0,
-              efficiencyScore: calculateEfficiencyScore(dept, performance)
-            },
-
-            // Aktivlik göstəriciləri
-            activity: {
-              recentAdditions: activity?.recentAssetsCount || 0,
-              maintenanceDue: activity?.maintenanceDueCount || 0,
-              warrantyActive: activity?.warrantyActiveCount || 0,
-              totalAdditions: monthly?.totalAdditions || 0
-            },
-
-            // Yaş analizi
-            ageAnalysis: {
-              avgAssetAge: age?.avgAssetAge || 0,
-              oldestAssetAge: age?.oldestAssetAge || 0,
-              newestAssetAge: age?.newestAssetAge || 0,
-              ageCategory: getAgeCategory(age?.avgAssetAge || 0)
-            },
-
-            // Kompozisiya
-            composition: {
-              categories: category?.categories || [],
-              totalCategories: category?.totalCategories || 0,
-              personnel: personnel?.personnel || [],
-              totalPersonnel: personnel?.totalPersonnel || 0
-            },
-
-            // Trendlər
-            trends: {
-              monthlyActivity: monthly?.monthlyActivity || [],
-              growthRate: calculateGrowthRate(dept, monthly),
-              valueTrend: getValueTrend(dept, overallStats)
-            },
-
-            // Ümumi dəyərlərdə payı
-            percentageOfTotal: overallStats.totalCurrentValue > 0
-              ? parseFloat(((dept.totalCurrentValue / overallStats.totalCurrentValue) * 100).toFixed(2))
-              : 0,
-
-            // Prioritizasiya
-            priority: getDepartmentPriority(dept, activity)
-          };
-        }),
-
-        // Toplamalar
+        departments,
         summary: {
-          topDepartmentsByValue: departmentStats
-            .filter(d => d.department !== "Müəyyən edilməyib")
-            .slice(0, 5)
-            .map(d => ({
-              department: d.department,
-              value: d.totalCurrentValue,
-              percentage: overallStats.totalCurrentValue > 0
-                ? parseFloat(((d.totalCurrentValue / overallStats.totalCurrentValue) * 100).toFixed(2))
-                : 0
-            })),
-
-          topDepartmentsByAssetCount: departmentStats
-            .filter(d => d.department !== "Müəyyən edilməyib")
-            .sort((a, b) => b.assetCount - a.assetCount)
-            .slice(0, 5)
-            .map(d => ({
-              department: d.department,
-              assetCount: d.assetCount,
-              percentage: overallStats.totalAssets > 0
-                ? parseFloat(((d.assetCount / overallStats.totalAssets) * 100).toFixed(2))
-                : 0
-            })),
-
-          departmentsRequiringAttention: departmentStats
-            .filter(d => {
-              const activity = activityStats.find(a => a._id === d.department);
-              return activity?.maintenanceDueCount > 0 || 
-                     d.avgAmortizationPercentage > 70 ||
-                     d.totalCurrentValue < (d.totalInitialValue * 0.3);
-            })
-            .map(d => ({
-              department: d.department,
-              issues: [
-                ...(activityStats.find(a => a._id === d.department)?.maintenanceDueCount > 0 
-                  ? ["Təmir tələb olunan vəsaitlər"] 
-                  : []),
-                ...(d.avgAmortizationPercentage > 70 
-                  ? ["Yüksək amortizasiya dərəcəsi"] 
-                  : []),
-                ...(d.totalCurrentValue < (d.totalInitialValue * 0.3) 
-                  ? ["Aşağı dəyər saxlanması"] 
-                  : [])
-              ]
-            }))
-        },
-
-        // Analiz nəticələri
-        analysis: {
-          distribution: {
-            byValue: departmentStats.reduce((acc, dept) => {
-              const range = getValueRange(dept.totalCurrentValue);
-              acc[range] = (acc[range] || 0) + 1;
-              return acc;
-            }, {}),
-
-            byAssetCount: departmentStats.reduce((acc, dept) => {
-              const range = getAssetCountRange(dept.assetCount);
-              acc[range] = (acc[range] || 0) + 1;
-              return acc;
-            }, {})
-          },
-
-          recommendations: generateDepartmentRecommendations(departmentStats, activityStats)
-        }
-      },
-      metadata: {
-        generatedAt: new Date().toISOString(),
-        timezone: 'Asia/Baku',
-        departmentsAnalyzed: departmentStats.length,
-        assetsAnalyzed: overallStats.totalAssets,
-        dataPoints: {
-          financial: departmentStats.length * 6, // 6 financial metric per department
-          performance: departmentStats.length * 4,
-          activity: departmentStats.length * 4,
-          age: departmentStats.length * 4,
-          composition: departmentStats.length * 2
+          totalDepartments: departments.length,
+          totalAssets: overall.totalAssets,
+          totalValue: parseFloat(overall.totalCurrentValue.toFixed(2))
         }
       }
-    };
-
-    console.log("✅ Department values prepared successfully");
-    
-    res.json(responseData);
+    });
 
   } catch (error) {
     console.error('❌ GET DEPARTMENT VALUES Error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: error.message,
-      errorType: error.name,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

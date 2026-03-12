@@ -31,6 +31,7 @@ import chatbotRoute from "./routes/chatbotRoute.js";
 import dashboardRoutess from "./routes/hrrDashboardRoute.js";
 import dashboardRoute from "./routes/dashboardRoutes.js";
 import statRoute from "./routes/statsRoute.js";
+import eventRoutes from "./routes/eventRoute.js";
 
 dotenv.config();
 
@@ -106,7 +107,7 @@ app.use("/api/chatbot", chatbotRoute);
 app.use("/api/dashboard", dashboardRoute);
 app.use("/api/hrdashboard", dashboardRoutess);
 app.use("/api/stats", statRoute);
-
+app.use("/api/events", eventRoutes);
 // --- DB connect ---
 connectDB();
 
