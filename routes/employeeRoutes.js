@@ -41,7 +41,10 @@ import {
   updateEmployeeTaxData,
   uploadEmployeeFile,
   deleteEmployeeFile,
-  getAllLeavesForCompany
+  getAllLeavesForCompany,
+  getAttendanceStats,
+  getWeeklySummary,
+  getLatecomers
 } from "../controllers/employeeController.js";
 
 import protect from "../middlewares/authMiddleware.js";
@@ -1699,7 +1702,80 @@ router.put("/:employeeId/leaves/:leaveId",protect, updateLeave);
 router.delete("/:employeeId/leaves/:leaveId",protect, deleteLeave);
 
 // ===================== İŞ GİRİŞİ ƏMƏLİYYATLARI =====================
-
+/**
+ * @swagger
+ * /api/attendance/stats:
+ *   get:
+ *     summary: Tarix aralığı üzrə iştirak statistikaları
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: Başlanğıc tarix (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: Bitiş tarix (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Uğurlu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     attendanceRate: { type: string }
+ *                     presentCount: { type: number }
+ *                     lateCount: { type: number }
+ *                     excusedCount: { type: number }
+ *                     absentCount: { type: number }
+ *                     totalEmployees: { type: number }
+ *                     period: { type: object }
+ */
+router.get("/:employeeId/attendances/attendance/stats", protect, getAttendanceStats);
+/**
+ * @swagger
+ * /api/attendance/weekly-summary:
+ *   get:
+ *     summary: Həftəlik iştirak xülasəsi
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: weekStart
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: Həftənin başlanğıc tarixi (bazar ertəsi, YYYY-MM-DD)
+ *     responses: 200...
+ */
+router.get("/:employeeId/attendances/attendance/weekly-summary", protect, getWeeklySummary);
+/**
+ * @swagger
+ * /api/attendance/latecomers:
+ *   get:
+ *     summary: Gecikən işçilər siyahısı
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         description: Tarix (YYYY-MM-DD)
+ *     responses: 200...
+ */
+router.get("/:employeeId/attendances/attendance/latecomers", protect, getLatecomers);
 /**
  * @swagger
  * /api/employees/{employeeId}/attendances:

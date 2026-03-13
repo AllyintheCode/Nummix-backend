@@ -1354,6 +1354,136 @@ export const getEmployeeLeaveById = async (req, res) => {
 // ===================== ⏰ ATTENDANCE FUNKSİYALARI =====================
 
 // ✅ İş girişi əlavə et
+export const getAttendanceStats = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: "startDate və endDate tələb olunur" });
+    }
+
+    // Bütün işçiləri attendances ilə birlikdə çək
+    const employees = await Employee.find().select("attendances");
+
+    let totalPresent = 0, totalLate = 0, totalExcused = 0, totalAbsent = 0;
+    let dayCount = 0;
+
+    // Hər bir gün üçün yoxla (sadəcə iş günləri)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      dayCount++;
+
+      employees.forEach(emp => {
+        const attendance = (emp.attendances || []).find(a => a.date === dateStr);
+        if (attendance) {
+          if (attendance.status === 'present' || attendance.status === 'remote') totalPresent++;
+          else if (attendance.isLate || attendance.status === 'late') totalLate++;
+          else if (attendance.status === 'on_leave' || attendance.status === 'sick') totalExcused++;
+          else if (attendance.status === 'absent') totalAbsent++;
+        }
+      });
+    }
+
+    const totalEmployees = employees.length;
+    const totalPossibleAttendances = totalEmployees * dayCount;
+    const attendanceRate = totalPossibleAttendances 
+      ? ((totalPresent + totalLate) / totalPossibleAttendances * 100).toFixed(1) 
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        attendanceRate: `${attendanceRate}%`,
+        presentCount: totalPresent,
+        lateCount: totalLate,
+        excusedCount: totalExcused,
+        absentCount: totalAbsent,
+        totalEmployees,
+        period: { startDate, endDate }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+export const getWeeklySummary = async (req, res) => {
+  try {
+    const { weekStart } = req.query; // Məsələn: 2025-03-24 (bazar ertəsi)
+    if (!weekStart) {
+      return res.status(400).json({ success: false, message: "weekStart tələb olunur" });
+    }
+
+    const start = new Date(weekStart);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6); // həftənin sonu (bazar)
+
+    const employees = await Employee.find().select("attendances");
+
+    const weekDays = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      let present = 0, late = 0, involuntary = 0; // involuntary = 'absent' və ya 'on_leave' deyil
+
+      employees.forEach(emp => {
+        const att = (emp.attendances || []).find(a => a.date === dateStr);
+        if (att) {
+          if (att.status === 'present' || att.status === 'remote') present++;
+          else if (att.isLate || att.status === 'late') late++;
+          else if (att.status === 'absent') involuntary++;
+        }
+      });
+
+      const total = employees.length;
+      const attendance = total ? ((present + late) / total * 100).toFixed(1) : 0;
+
+      weekDays.push({
+        day: d.toLocaleDateString('az-AZ', { weekday: 'short' }), // "B.e", "Ç.a" ...
+        date: dateStr,
+        present,
+        late,
+        involuntary,
+        attendance: parseFloat(attendance),
+        trendingUp: true // Gerçək trend hesablamaq istəyirsinizsə əvvəlki günlə müqayisə edin
+      });
+    }
+
+    res.json({ success: true, data: weekDays });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+export const getLatecomers = async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ success: false, message: "date tələb olunur" });
+    }
+
+    const employees = await Employee.find().select("firstName lastName Department attendances");
+
+    const latecomers = [];
+
+    employees.forEach(emp => {
+      const attendance = (emp.attendances || []).find(a => a.date === date);
+      if (attendance && (attendance.isLate || attendance.status === 'late')) {
+        latecomers.push({
+          employeeId: emp._id,
+          name: `${emp.firstName} ${emp.lastName}`,
+          department: emp.Department || 'unknown',
+          lateMinutes: attendance.lateMinutes || 0,
+          entryTime: attendance.checkInTime 
+            ? new Date(attendance.checkInTime).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })
+            : '--'
+        });
+      }
+    });
+
+    res.json({ success: true, data: latecomers });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 export const addAttendance = async (req, res) => {
   try {
     const { employeeId } = req.params;

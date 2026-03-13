@@ -60,12 +60,12 @@ const assetSchema = new mongoose.Schema({
     required: [true, "Asset adı tələb olunur"],
     trim: true,
   },
-  category: {
-    type: String,
-    required: [true, "Kateqoriya tələb olunur"],
-    trim: true,
-    index: true
-  },
+category: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Category',
+  required: [true, "Kateqoriya tələb olunur"],
+  index: true
+},
   account: {
     type: String,
     required: [true, "Hesab nömrəsi tələb olunur"],
@@ -175,11 +175,12 @@ const assetSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
-  department: {
-    type: String,
-    trim: true,
-    index: true
-  },
+department: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Department',
+  index: true
+},
+
   responsiblePerson: {
     type: String,
     trim: true,
@@ -326,53 +327,6 @@ assetSchema.statics.findActiveByUserId = function(userId) {
   }).sort({ name: 1 });
 };
 
-assetSchema.statics.getUserAssetStats = async function(userId) {
-  try {
-    const stats = await this.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(userId),
-          isDeleted: false 
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          totalAssets: { $sum: 1 },
-          totalInitialValue: { $sum: "$initialValue" },
-          totalCurrentValue: { $sum: "$currentValue" },
-          totalAmortization: { $sum: "$amortization" },
-          totalMaintenanceCost: { $sum: "$maintenanceCost" },
-          totalInsuranceAmount: { $sum: "$insuranceAmount" },
-          activeAssets: { 
-            $sum: { $cond: [{ $eq: ["$status", "Aktiv"] }, 1, 0] }
-          },
-          passiveAssets: { 
-            $sum: { $cond: [{ $eq: ["$status", "Passiv"] }, 1, 0] }
-          },
-          soldAssets: { 
-            $sum: { $cond: [{ $eq: ["$status", "Satılıb"] }, 1, 0] }
-          }
-        }
-      }
-    ]);
-    
-    return stats[0] || {
-      totalAssets: 0,
-      totalInitialValue: 0,
-      totalCurrentValue: 0,
-      totalAmortization: 0,
-      totalMaintenanceCost: 0,
-      totalInsuranceAmount: 0,
-      activeAssets: 0,
-      passiveAssets: 0,
-      soldAssets: 0
-    };
-  } catch (error) {
-    console.error("Asset stats error:", error);
-    throw error;
-  }
-};
 
 assetSchema.statics.generateCategoryReport = async function(userId) {
   return this.aggregate([
@@ -640,6 +594,26 @@ assetSchema.pre('findOne', function() {
 assetSchema.pre('aggregate', function() {
   this.pipeline().unshift({ $match: { isDeleted: false } });
 });
+// Asset modelinə bu statik metodu əlavə et
+assetSchema.statics.getUserAssetStats = async function(userId) {
+  const stats = await this.aggregate([
+    { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: false } },
+    {
+      $group: {
+        _id: null,
+        totalAssets: { $sum: 1 },
+        totalInitialValue: { $sum: "$initialValue" },
+        totalCurrentValue: { $sum: "$currentValue" },
+        totalAmortization: { $sum: "$amortization" },
+        totalMaintenanceCost: { $sum: "$maintenanceCost" },
+        activeAssets: { $sum: { $cond: [{ $eq: ["$status", "Aktiv"] }, 1, 0] } },
+        passiveAssets: { $sum: { $cond: [{ $eq: ["$status", "Passiv"] }, 1, 0] } },
+        soldAssets: { $sum: { $cond: [{ $eq: ["$status", "Satılıb"] }, 1, 0] } }
+      }
+    }
+  ]);
+  return stats[0] || {};
+};
 
 // ⭐ INDEXES (Performans üçün)
 assetSchema.index({ userId: 1, category: 1 });
