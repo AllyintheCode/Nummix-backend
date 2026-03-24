@@ -627,18 +627,22 @@ export const getTaxBreakdown = async (req, res) => {
     employees.forEach(emp => {
       try {
         const gross = emp.gross || 0;
-        const empType = emp.employeeType === 'state' ? 'state' : 'private'; // təhlükəsiz default
+        const empType = emp.employeeType === 'state' ? 'state' : 'private';
 
         const taxResult = taxCalculationService.calculateAllTaxes(gross, empType);
 
+        // ✅ DÜZƏLİŞ: employee tərəfi
         totals.incomeTax += taxResult.employee.taxes.incomeTax || 0;
         totals.dsmfEmployee += taxResult.employee.taxes.dsmf || 0;
         totals.itsEmployee += taxResult.employee.taxes.its || 0;
         totals.ishEmployee += taxResult.employee.taxes.ish || 0;
         totals.gvTax += taxResult.employee.taxes.gvTax || 0;
-        totals.dsmfEmployer += taxResult.employer.taxes.dsmf || 0;
-        totals.itsEmployer += taxResult.employer.taxes.its || 0;
-        totals.ishEmployer += taxResult.employer.taxes.ish || 0;
+
+        // ✅ DÜZƏLİŞ: employer tərəfi – employerTaxes istifadə edilməlidir
+        totals.dsmfEmployer += taxResult.employer.employerTaxes?.dsmf || 0;
+        totals.itsEmployer += taxResult.employer.employerTaxes?.its || 0;
+        totals.ishEmployer += taxResult.employer.employerTaxes?.ish || 0;
+        
       } catch (empError) {
         console.error(`❌ Error processing employee ${emp._id}:`, empError.message);
       }
@@ -686,7 +690,6 @@ export const getTaxBreakdown = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
 export const createAccountingEntries = async (req, res) => {
   try {
     const userId = req.user._id;

@@ -10,7 +10,6 @@ import budgetRoutes from "./routes/budgetRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import generalLedgerRoutes from "./routes/generalLedgerRoutes.js";
 import payrollRoutes from "./routes/payrollroute.js";
-import assetsRoutes from "./routes/assets.js";
 import customerRoutes from "./routes/customersRoute.js";
 import salesRoute from "./routes/salesRoute.js";
 import suppliersRoute from "./routes/suppliersRoute.js";
@@ -32,7 +31,10 @@ import dashboardRoutess from "./routes/hrrDashboardRoute.js";
 import dashboardRoute from "./routes/dashboardRoutes.js";
 import statRoute from "./routes/statsRoute.js";
 import eventRoutes from "./routes/eventRoute.js";
-
+import assetsRoutes    from "./routes/assets.js";
+import categoryRoutes  from "./routes/categoryRoutes.js";
+import locationRoutes  from "./routes/locationRoutes.js";
+import reportRoutes    from "./routes/reportsRoute.js";
 dotenv.config();
 
 const app = express();
@@ -92,7 +94,6 @@ app.use("/api/budgets", budgetRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/general-ledger", generalLedgerRoutes);
 app.use("/api/payroll", payrollRoutes);
-app.use("/api/assets", assetsRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/sales", salesRoute);
 app.use("/api/suppliers", suppliersRoute);
@@ -108,6 +109,14 @@ app.use("/api/dashboard", dashboardRoute);
 app.use("/api/hrdashboard", dashboardRoutess);
 app.use("/api/stats", statRoute);
 app.use("/api/events", eventRoutes);
+app.use("/api/assets", assetsRoutes);
+app.use("/api/category", categoryRoutes);
+app.use("/api/locations", locationRoutes);
+app.use("/api/reports", reportRoutes);
+
+
+
+
 // --- DB connect ---
 connectDB();
 
