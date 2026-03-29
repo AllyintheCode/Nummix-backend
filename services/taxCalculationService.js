@@ -1,214 +1,225 @@
 class TaxCalculationService {
   
+  // Köməkçi funksiya: manatı qəpiyə çevir (tam ədəd)
+  _toCents(amount) {
+    const num = Number(amount);
+    if (isNaN(num)) throw new Error('Etibarlı rəqəm deyil');
+    return Math.round(num * 100);
+  }
+
+  // Köməkçi funksiya: qəpiyi manata çevir (2 onluq xana)
+  _fromCents(cents) {
+    return Number((cents / 100).toFixed(2));
+  }
+
+  // Faiz hesablanması: məbləğ (qəpik) * faiz / 100, nəticə qəpik (tam ədəd)
+  _percentage(cents, percent) {
+    return Math.round(cents * percent / 100);
+  }
+
   // ===================== 🏢 ÜMUMİ İŞƏGÖTÜRƏN VERGİLƏRİ (SADƏ VERSİYA) =====================
   calculateEmployerTaxes(salaryFund) {
-    // salaryFund-ı number-a çevir
-    const fund = Number(salaryFund);
-    if (isNaN(fund)) {
-      throw new Error('salaryFund etibarlı rəqəm deyil');
+    const fundCents = this._toCents(salaryFund);
+    
+    const dsmfCents = this._percentage(fundCents, 22);
+    const ishCents = this._percentage(fundCents, 0.5);
+    let itsCents;
+    if (fundCents <= 8000 * 100) {
+      itsCents = this._percentage(fundCents, 2);
+    } else {
+      itsCents = this._percentage(fundCents, 0.5);
     }
-    
-    const dsmf = fund * 0.22;  // 22%
-    const ish = fund * 0.005;  // 0.5%
-    
-    // İTŞ hesablanması
-    let its = fund <= 8000 ? fund * 0.02 : fund * 0.005;
+
+    const totalCents = dsmfCents + ishCents + itsCents;
 
     return {
       employerTaxes: { 
-        dsmf: Number(dsmf.toFixed(2)), 
-        ish: Number(ish.toFixed(2)), 
-        its: Number(its.toFixed(2)) 
+        dsmf: this._fromCents(dsmfCents), 
+        ish: this._fromCents(ishCents), 
+        its: this._fromCents(itsCents) 
       },
-      totalEmployerTaxes: Number((dsmf + ish + its).toFixed(2))
+      totalEmployerTaxes: this._fromCents(totalCents)
     };
   }
 
   // ===================== 🏛️ DÖVLƏT İŞÇİSİ ÜÇÜN VERGİLƏR =====================
   calculateStateEmployeeTaxes(salary) {
-    // salary-ı number-a çevir
-    const sal = Number(salary);
-    if (isNaN(sal)) {
-      throw new Error('Salary etibarlı rəqəm deyil');
-    }
+    const salCents = this._toCents(salary);
+    const salManat = salCents / 100;
     
-    if (sal < 400) {
+    if (salManat < 400) {
       throw new Error('Dövlət işçisi üçün minimum əməkhaqqı 400 AZN olmalıdır');
     }
 
-    let incomeTax = 0;
-    
-    // Gəlir vergisi hesablanması (400-2500 arası)
-    if (sal <= 2500) {
-      incomeTax = (sal - 200) * 0.14;
+    let incomeTaxCents = 0;
+    if (salManat <= 2500) {
+      const taxable = salCents - 200 * 100;
+      if (taxable > 0) {
+        incomeTaxCents = this._percentage(taxable, 14);
+      }
     } else {
-      // 2500-dən yuxarı üçün gəlir vergisi
-      incomeTax = (sal - 2500) * 0.25 + 350;
+      const excessCents = salCents - 2500 * 100;
+      incomeTaxCents = this._percentage(excessCents, 25) + 350 * 100;
     }
 
-    const dsmf = sal * 0.03;        // 3% DSMF
-    const ish = sal * 0.005;        // 0.5% İŞS
+    const dsmfCents = this._percentage(salCents, 3);
+    const ishCents = this._percentage(salCents, 0.5);
     
-    // İTŞ hesablanması
-    let its = 0;
-    if (sal <= 8000) {
-      its = sal * 0.02;             // 2%
+    let itsCents;
+    if (salManat <= 8000) {
+      itsCents = this._percentage(salCents, 2);
     } else {
-      its = sal * 0.005;            // 0.5%
+      itsCents = this._percentage(salCents, 0.5);
     }
 
-    const totalTaxes = incomeTax + dsmf + ish + its;
-    const netSalary = sal - totalTaxes;
+    const totalTaxesCents = incomeTaxCents + dsmfCents + ishCents + itsCents;
+    const netSalaryCents = salCents - totalTaxesCents;
 
     return {
-      grossSalary: sal,
+      grossSalary: salManat,
       taxes: {
-        incomeTax: Number(incomeTax.toFixed(2)),
-        dsmf: Number(dsmf.toFixed(2)),
-        ish: Number(ish.toFixed(2)),
-        its: Number(its.toFixed(2))
+        incomeTax: this._fromCents(incomeTaxCents),
+        dsmf: this._fromCents(dsmfCents),
+        ish: this._fromCents(ishCents),
+        its: this._fromCents(itsCents)
       },
-      totalTaxes: Number(totalTaxes.toFixed(2)),
-      netSalary: Number(netSalary.toFixed(2))
+      totalTaxes: this._fromCents(totalTaxesCents),
+      netSalary: this._fromCents(netSalaryCents)
     };
   }
 
   // ===================== 🏛️ DÖVLƏT MÜƏSSİSƏSİ ÜÇÜN VERGİLƏR =====================
   calculateStateEmployerTaxes(salary) {
-    // salary-ı number-a çevir
-    const sal = Number(salary);
-    if (isNaN(sal)) {
-      throw new Error('Salary etibarlı rəqəm deyil');
-    }
+    const salCents = this._toCents(salary);
+    const salManat = salCents / 100;
     
-    const dsmf = sal * 0.22;        // 22% DSMF
-    const ish = sal * 0.005;        // 0.5% İŞS
+    const dsmfCents = this._percentage(salCents, 22);
+    const ishCents = this._percentage(salCents, 0.5);
     
-    // İTŞ hesablanması
-    let its = 0;
-    if (sal <= 8000) {
-      its = sal * 0.02;             // 2%
+    let itsCents;
+    if (salManat <= 8000) {
+      itsCents = this._percentage(salCents, 2);
     } else {
-      its = sal * 0.005;            // 0.5%
+      itsCents = this._percentage(salCents, 0.5);
     }
 
-    const totalEmployerTaxes = dsmf + ish + its;
-    const totalLaborCost = sal + totalEmployerTaxes;
+    const totalCents = dsmfCents + ishCents + itsCents;
+    const totalLaborCostCents = salCents + totalCents;
 
     return {
-      grossSalary: sal,
+      grossSalary: salManat,
       employerTaxes: {
-        dsmf: Number(dsmf.toFixed(2)),
-        ish: Number(ish.toFixed(2)),
-        its: Number(its.toFixed(2))
+        dsmf: this._fromCents(dsmfCents),
+        ish: this._fromCents(ishCents),
+        its: this._fromCents(itsCents)
       },
-      totalEmployerTaxes: Number(totalEmployerTaxes.toFixed(2)),
-      totalLaborCost: Number(totalLaborCost.toFixed(2))
+      totalEmployerTaxes: this._fromCents(totalCents),
+      totalLaborCost: this._fromCents(totalLaborCostCents)
     };
   }
 
   // ===================== 🏢 ÖZƏL İŞÇİ ÜÇÜN VERGİLƏR =====================
   calculatePrivateEmployeeTaxes(salary) {
-    // salary-ı number-a çevir
-    const sal = Number(salary);
-    if (isNaN(sal)) {
-      throw new Error('Salary etibarlı rəqəm deyil');
-    }
+    const salCents = this._toCents(salary);
+    const salManat = salCents / 100;
     
-    if (sal < 400) {
+    if (salManat < 400) {
       throw new Error('Özəl işçi üçün minimum əməkhaqqı 400 AZN olmalıdır');
     }
 
-    // DSMF hesablanması (xüsusi formula)
-    const dsmf = ((sal - 200) * 0.10) + 6;
-    const ish = sal * 0.005;        // 0.5% İŞS
-    
-    // İTŞ hesablanması
-    let its = 0;
-    if (sal <= 8000) {
-      its = sal * 0.02;             // 2%
+    // DSMF: (maaş - 200) * 10% + 6, lakin maaş 200-dən az olduqda 6 AZN
+    let dsmfCents;
+    if (salManat <= 200) {
+      dsmfCents = 6 * 100;
     } else {
-      its = sal * 0.005;            // 0.5%
+      dsmfCents = this._percentage(salCents - 200 * 100, 10) + 6 * 100;
     }
 
-    // Gəlir vergisi
-    let incomeTax = 0;
-    if (sal <= 2500) {
-      incomeTax = (sal - 200) * 0.03;         // (maaş-200) × 3%
-    } else if (sal <= 8000) {
-      incomeTax = 75 + (sal - 2500) * 0.10;   // 75 + (maaş-2500) × 10%
-    } else {
-      incomeTax = 625 + (sal - 8000) * 0.14;  // 625 + (maaş-8000) × 14%
-    }
+    const ishCents = this._percentage(salCents, 0.5);
     
-    // GV vergisi (yalnız 8000+ üçün)
-    let gvTax = 0;
-    if (sal > 8000) {
-      gvTax = (sal - 8000) * 0.14;
+    let itsCents;
+    if (salManat <= 8000) {
+      itsCents = this._percentage(salCents, 2);
+    } else {
+      itsCents = this._percentage(salCents, 0.5);
     }
 
-    const totalTaxes = dsmf + ish + its + incomeTax + gvTax;
-    const netSalary = sal - totalTaxes;
+    let incomeTaxCents = 0;
+    if (salManat <= 2500) {
+      const taxable = salCents - 200 * 100;
+      if (taxable > 0) {
+        incomeTaxCents = this._percentage(taxable, 3);
+      }
+    } else if (salManat <= 8000) {
+      const excessCents = salCents - 2500 * 100;
+      incomeTaxCents = 75 * 100 + this._percentage(excessCents, 10);
+    } else {
+      const excessCents = salCents - 8000 * 100;
+      incomeTaxCents = 625 * 100 + this._percentage(excessCents, 14);
+    }
+    
+    let gvTaxCents = 0;
+    if (salManat > 8000) {
+      const excessCents = salCents - 8000 * 100;
+      gvTaxCents = this._percentage(excessCents, 14);
+    }
+
+    const totalTaxesCents = dsmfCents + ishCents + itsCents + incomeTaxCents + gvTaxCents;
+    const netSalaryCents = salCents - totalTaxesCents;
 
     return {
-      grossSalary: sal,
+      grossSalary: salManat,
       taxes: {
-        dsmf: Number(dsmf.toFixed(2)),
-        ish: Number(ish.toFixed(2)),
-        its: Number(its.toFixed(2)),
-        incomeTax: Number(incomeTax.toFixed(2)),
-        gvTax: Number(gvTax.toFixed(2))
+        dsmf: this._fromCents(dsmfCents),
+        ish: this._fromCents(ishCents),
+        its: this._fromCents(itsCents),
+        incomeTax: this._fromCents(incomeTaxCents),
+        gvTax: this._fromCents(gvTaxCents)
       },
-      totalTaxes: Number(totalTaxes.toFixed(2)),
-      netSalary: Number(netSalary.toFixed(2))
+      totalTaxes: this._fromCents(totalTaxesCents),
+      netSalary: this._fromCents(netSalaryCents)
     };
   }
 
   // ===================== 🏢 ÖZƏL MÜƏSSİSƏ ÜÇÜN VERGİLƏR =====================
   calculatePrivateEmployerTaxes(salary) {
-    // salary-ı number-a çevir
-    const sal = Number(salary);
-    if (isNaN(sal)) {
-      throw new Error('Salary etibarlı rəqəm deyil');
-    }
+    const salCents = this._toCents(salary);
+    const salManat = salCents / 100;
     
-    // DSMF hesablanması (200 AZN-ə qədər 22%, 200+ üçün 15%)
-    let dsmf = 0;
-    if (sal <= 200) {
-      dsmf = sal * 0.22;            // 22%
+    let dsmfCents;
+    if (salManat <= 200) {
+      dsmfCents = this._percentage(salCents, 22);
     } else {
-      dsmf = (200 * 0.22) + ((sal - 200) * 0.15);
+      dsmfCents = this._percentage(200 * 100, 22) + this._percentage(salCents - 200 * 100, 15);
     }
 
-    const ish = sal * 0.005;        // 0.5% İŞS
+    const ishCents = this._percentage(salCents, 0.5);
     
-    // İTŞ hesablanması
-    let its = 0;
-    if (sal <= 8000) {
-      its = sal * 0.02;             // 2%
+    let itsCents;
+    if (salManat <= 8000) {
+      itsCents = this._percentage(salCents, 2);
     } else {
-      its = sal * 0.005;            // 0.5%
+      itsCents = this._percentage(salCents, 0.5);
     }
 
-    const totalEmployerTaxes = dsmf + ish + its;
-    const totalLaborCost = sal + totalEmployerTaxes;
+    const totalCents = dsmfCents + ishCents + itsCents;
+    const totalLaborCostCents = salCents + totalCents;
 
     return {
-      grossSalary: sal,
+      grossSalary: salManat,
       employerTaxes: {
-        dsmf: Number(dsmf.toFixed(2)),
-        ish: Number(ish.toFixed(2)),
-        its: Number(its.toFixed(2))
+        dsmf: this._fromCents(dsmfCents),
+        ish: this._fromCents(ishCents),
+        its: this._fromCents(itsCents)
       },
-      totalEmployerTaxes: Number(totalEmployerTaxes.toFixed(2)),
-      totalLaborCost: Number(totalLaborCost.toFixed(2))
+      totalEmployerTaxes: this._fromCents(totalCents),
+      totalLaborCost: this._fromCents(totalLaborCostCents)
     };
   }
 
   // ===================== 📊 ÜMUMİ HESABLAMA =====================
   calculateAllTaxes(salary, employeeType = 'private') {
     try {
-      // salary-ı number-a çevir
       const sal = Number(salary);
       if (isNaN(sal) || sal <= 0) {
         throw new Error('Salary etibarlı rəqəm deyil');
@@ -224,14 +235,17 @@ class TaxCalculationService {
         employerTaxes = this.calculatePrivateEmployerTaxes(sal);
       }
 
+      const totalTaxesPaid = employeeTaxes.totalTaxes + employerTaxes.totalEmployerTaxes;
+      const taxBurdenPercentage = (totalTaxesPaid / sal * 100).toFixed(2);
+
       return {
         employee: employeeTaxes,
         employer: employerTaxes,
         summary: {
           totalCostForCompany: employerTaxes.totalLaborCost,
           employeeNetSalary: employeeTaxes.netSalary,
-          totalTaxesPaid: employeeTaxes.totalTaxes + employerTaxes.totalEmployerTaxes,
-          taxBurdenPercentage: ((employeeTaxes.totalTaxes + employerTaxes.totalEmployerTaxes) / sal * 100).toFixed(2)
+          totalTaxesPaid: totalTaxesPaid,
+          taxBurdenPercentage: Number(taxBurdenPercentage)
         }
       };
     } catch (error) {
@@ -243,7 +257,6 @@ class TaxCalculationService {
   getCalculationExamples() {
     const examples = [];
 
-    // Dövlət işçisi nümunələri
     [1500, 2500, 3000, 5000, 10000].forEach(salary => {
       examples.push({
         type: 'Dövlət İşçisi',
@@ -252,7 +265,6 @@ class TaxCalculationService {
       });
     });
 
-    // Özəl işçi nümunələri
     [1500, 2500, 3000, 5000, 10000].forEach(salary => {
       examples.push({
         type: 'Özəl İşçi',

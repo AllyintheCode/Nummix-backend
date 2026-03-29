@@ -1,5 +1,5 @@
 import taxCalculationService from '../services/taxCalculationService.js';
-import Employee from '../models/Employee.js';
+import Employee, { MonthlySalary } from '../models/Employee.js';
 import User from '../models/User.js';
 import AccountingEntry from '../models/AccountingEntry.js';
 import mongoose from 'mongoose';
@@ -500,6 +500,14 @@ export const getCalculationExamples = async (req, res) => {
   }
 };
 
+// ===================== KÖMƏKÇİ FUNKSİYA =====================
+const getMonthRange = (month, year) => {
+  const targetDate = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+  const nextMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
+  return { targetDate, nextMonth };
+};
+
+// ===================== BULK TAX HESABLAMA (DƏYİŞMİR) =====================
 export const calculateBulkTaxes = async (req, res) => {
   try {
     const { employees } = req.body;
@@ -524,128 +532,212 @@ export const calculateBulkTaxes = async (req, res) => {
   }
 };
 
+// ===================== AYLIK MAAŞ İCMALI (MonthlySalary əsaslı) =====================
 export const getCompanyPayrollSummary = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { month, year } = req.query;
+    let { month, year } = req.query;
+    if (!month) month = new Date().getMonth() + 1;
+    if (!year) year = new Date().getFullYear();
 
-    const targetDate = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
-    const nextMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
+    const { targetDate, nextMonth } = getMonthRange(month, year);
 
-    const employees = await Employee.find({ companyId: userId })
-      .select('firstName lastName gross Net_salary tax social_pay salary_status employeeType position')
-      .lean();
+    // ✅ Aktiv işçilər üçün MonthlySalary sənədlərini avtomatik yarat/yenilə
+    await Employee.processMonthlyPayroll(userId, Number(month), Number(year));
 
-    const employeeIds = employees.map(e => e._id);
-    const employeesWithBonus = await Employee.find({ _id: { $in: employeeIds } })
-      .select('paymentHistory')
-      .lean();
+    // MonthlySalary-dən məlumatları çək
+    const monthlySalaries = await MonthlySalary.find({
+      companyId: userId,
+      month: { $gte: targetDate, $lt: nextMonth }
+    }).populate('employeeId', 'firstName lastName position Department status');
 
-    const bonusMap = {};
-    employeesWithBonus.forEach(emp => {
-      let bonus = 0;
-      if (emp.paymentHistory) {
-        bonus = emp.paymentHistory
-          .filter(p => p.paymentType === 'bonus' && p.forMonth >= targetDate && p.forMonth < nextMonth)
-          .reduce((sum, p) => sum + (p.amount || 0), 0);
-      }
-      bonusMap[emp._id] = bonus;
-    });
+    if (!monthlySalaries.length) {
+      return res.json({
+        success: true,
+        data: {
+          period: {
+            month: targetDate.getMonth() + 1,
+            year: targetDate.getFullYear(),
+            name: targetDate.toLocaleDateString('az-AZ', { month: 'long', year: 'numeric' })
+          },
+          summary: {
+            totalEmployees: 0,
+            totalGrossSalary: 0,
+            totalNetSalary: 0,
+            totalTax: 0,
+            totalSocialPay: 0,
+            totalBonus: 0,
+            totalCompanyCost: 0,
+            averageSalary: 0,
+            averageNetSalary: 0
+          },
+          employees: []
+        }
+      });
+    }
 
-    let totalGross = 0, totalNet = 0, totalTax = 0, totalSocialPay = 0, totalBonus = 0;
+    let totalGross = 0,
+        totalNet = 0,
+        totalTax = 0,
+        totalSocialPay = 0,
+        totalBonus = 0,
+        totalCompanyCost = 0;
 
-    const employeeList = employees.map(emp => {
-      const gross = emp.gross || 0;
-      const net = emp.Net_salary || 0;
-      const tax = emp.tax || 0;
-      const social = emp.social_pay || 0;
-      const bonus = bonusMap[emp._id] || 0;
+    const employeeList = monthlySalaries.map(ms => {
+      const gross = ms.gross || 0;
+      const net = ms.net || 0;
+      const bonus = ms.bonus || 0;
+      const employeeTaxTotal = ms.employeeTaxes?.total || 0;
+      const employerTaxTotal = ms.employerTaxes?.total || 0;
 
-      totalGross += gross;
-      totalNet += net;
-      totalTax += tax;
-      totalSocialPay += social;
-      totalBonus += bonus;
+      totalGross      += gross;
+      totalNet        += net;
+      totalTax        += employeeTaxTotal;
+      totalSocialPay  += employeeTaxTotal;
+      totalBonus      += bonus;
+      totalCompanyCost += gross + employerTaxTotal;
+
+      const basicSalary = gross - bonus;
 
       return {
-        id: emp._id,
-        name: `${emp.firstName} ${emp.lastName}`,
-        position: emp.position,
-        basicSalary: gross - bonus,
+        id:           ms.employeeId?._id || ms.employeeId,
+        name:         ms.employeeId
+                        ? `${ms.employeeId.firstName} ${ms.employeeId.lastName}`
+                        : 'Məlumat yoxdur',
+        position:     ms.employeeId?.position || '',
+        department:   ms.employeeId?.Department || '',
+        basicSalary,
         bonus,
         gross,
         net,
-        status: emp.salary_status || 'pending'
+        employeeTaxes: {
+          incomeTax: ms.employeeTaxes?.incomeTax || 0,
+          dsmf:      ms.employeeTaxes?.dsmf      || 0,
+          its:       ms.employeeTaxes?.its        || 0,
+          ish:       ms.employeeTaxes?.ish        || 0,
+          total:     employeeTaxTotal
+        },
+        employerTaxes: {
+          dsmf:  ms.employerTaxes?.dsmf  || 0,
+          its:   ms.employerTaxes?.its   || 0,
+          ish:   ms.employerTaxes?.ish   || 0,
+          total: employerTaxTotal
+        },
+        // terminated işçilər üçün əlavə məlumat
+        isTermination:  ms.terminationDetails?.isTermination || false,
+        terminationType: ms.terminationDetails?.terminationType || null,
+        status:  ms.status === 'paid' ? 'paid' : 'pending',
+        // işçinin HR statusu
+        employeeStatus: ms.employeeId?.status || 'active'
       };
     });
+
+    const totalEmployees = monthlySalaries.length;
 
     res.json({
       success: true,
       data: {
         period: {
           month: targetDate.getMonth() + 1,
-          year: targetDate.getFullYear(),
-          name: targetDate.toLocaleDateString('az-AZ', { month: 'long', year: 'numeric' })
+          year:  targetDate.getFullYear(),
+          name:  targetDate.toLocaleDateString('az-AZ', { month: 'long', year: 'numeric' })
         },
         summary: {
-          totalEmployees: employees.length,
-          totalGrossSalary: totalGross,
-          totalNetSalary: totalNet,
-          totalTax: totalTax,
-          totalSocialPay: totalSocialPay,
-          totalBonus: totalBonus,
-          totalCompanyCost: totalGross + totalTax + totalSocialPay,
-          averageSalary: employees.length ? Math.round(totalGross / employees.length) : 0,
-          averageNetSalary: employees.length ? Math.round(totalNet / employees.length) : 0
+          totalEmployees,
+          totalGrossSalary:  totalGross,
+          totalNetSalary:    totalNet,
+          totalTax,
+          totalSocialPay,
+          totalBonus,
+          totalCompanyCost,
+          averageSalary:    totalEmployees ? Math.round(totalGross / totalEmployees) : 0,
+          averageNetSalary: totalEmployees ? Math.round(totalNet   / totalEmployees) : 0
         },
         employees: employeeList
       }
     });
+
   } catch (error) {
     console.error('Company payroll summary error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// ===================== VERGİ DETALLARI (MonthlySalary əsaslı) =====================
 export const getTaxBreakdown = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { month, year } = req.query;
+    let { month, year } = req.query;
+    if (!month) month = new Date().getMonth() + 1;
+    if (!year) year = new Date().getFullYear();
 
-    const targetDate = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+    const { targetDate, nextMonth } = getMonthRange(month, year);
 
-    const employees = await Employee.find({ companyId: userId })
-      .select('gross employeeType')
-      .lean();
+    // Aylıq məlumatları MonthlySalary-dən götür
+    const monthlySalaries = await MonthlySalary.find({
+      companyId: userId,
+      month: { $gte: targetDate, $lt: nextMonth }
+    });
 
-    console.log(`📊 getTaxBreakdown: ${employees.length} employees found`);
+    if (!monthlySalaries.length) {
+      // Boş nəticə
+      return res.json({
+        success: true,
+        data: {
+          period: {
+            month: targetDate.getMonth() + 1,
+            year: targetDate.getFullYear(),
+            name: targetDate.toLocaleDateString('az-AZ', { month: 'long', year: 'numeric' })
+          },
+          taxBreakdown: {
+            employeeTaxes: {
+              incomeTax: { amount: 0, percentage: 0, description: 'Gəlir vergisi (14%)' },
+              dsmf: { amount: 0, percentage: 0, description: 'DSMF (3%)' },
+              its: { amount: 0, percentage: 0, description: 'İTS (2%)' },
+              ish: { amount: 0, percentage: 0, description: 'İŞS (0.5%)' },
+              gvTax: { amount: 0, percentage: 0, description: 'Əlavə GV (8000+ üçün)' },
+              total: 0
+            },
+            employerTaxes: {
+              dsmf: { amount: 0, percentage: 0, description: 'DSMF (22%)' },
+              its: { amount: 0, percentage: 0, description: 'İTS (2%)' },
+              ish: { amount: 0, percentage: 0, description: 'İŞS (0.5%)' },
+              total: 0
+            },
+            totalTaxes: {
+              totalAmount: 0,
+              employeeShare: 0,
+              employerShare: 0,
+              employeePercentage: 0,
+              employerPercentage: 0
+            }
+          }
+        }
+      });
+    }
 
-    const totals = {
-      incomeTax: 0, dsmfEmployee: 0, itsEmployee: 0, ishEmployee: 0, gvTax: 0,
-      dsmfEmployer: 0, itsEmployer: 0, ishEmployer: 0
+    // Totalları topla
+    let totals = {
+      incomeTax: 0,
+      dsmfEmployee: 0,
+      itsEmployee: 0,
+      ishEmployee: 0,
+      gvTax: 0,
+      dsmfEmployer: 0,
+      itsEmployer: 0,
+      ishEmployer: 0
     };
 
-    employees.forEach(emp => {
-      try {
-        const gross = emp.gross || 0;
-        const empType = emp.employeeType === 'state' ? 'state' : 'private';
+    monthlySalaries.forEach(ms => {
+      totals.incomeTax += ms.employeeTaxes?.incomeTax || 0;
+      totals.dsmfEmployee += ms.employeeTaxes?.dsmf || 0;
+      totals.itsEmployee += ms.employeeTaxes?.its || 0;
+      totals.ishEmployee += ms.employeeTaxes?.ish || 0;
+      totals.gvTax += ms.employeeTaxes?.gvTax || 0;
 
-        const taxResult = taxCalculationService.calculateAllTaxes(gross, empType);
-
-        // ✅ DÜZƏLİŞ: employee tərəfi
-        totals.incomeTax += taxResult.employee.taxes.incomeTax || 0;
-        totals.dsmfEmployee += taxResult.employee.taxes.dsmf || 0;
-        totals.itsEmployee += taxResult.employee.taxes.its || 0;
-        totals.ishEmployee += taxResult.employee.taxes.ish || 0;
-        totals.gvTax += taxResult.employee.taxes.gvTax || 0;
-
-        // ✅ DÜZƏLİŞ: employer tərəfi – employerTaxes istifadə edilməlidir
-        totals.dsmfEmployer += taxResult.employer.employerTaxes?.dsmf || 0;
-        totals.itsEmployer += taxResult.employer.employerTaxes?.its || 0;
-        totals.ishEmployer += taxResult.employer.employerTaxes?.ish || 0;
-        
-      } catch (empError) {
-        console.error(`❌ Error processing employee ${emp._id}:`, empError.message);
-      }
+      totals.dsmfEmployer += ms.employerTaxes?.dsmf || 0;
+      totals.itsEmployer += ms.employerTaxes?.its || 0;
+      totals.ishEmployer += ms.employerTaxes?.ish || 0;
     });
 
     const employeeTaxTotal = totals.incomeTax + totals.dsmfEmployee + totals.itsEmployee + totals.ishEmployee + totals.gvTax;
@@ -877,4 +969,60 @@ export default {
   createAccountingEntries,
   getAccountingEntries,
   exportComprehensivePayrollExcel
+};
+// Son N ayın maaş fondu trendini qaytarır
+export const getPaymentTrends = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const months = parseInt(req.query.months) || 12;
+
+    // Son N ayın başlanğıc tarixini hesabla
+    const endDate   = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months + 1);
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+
+    // MonthlySalary-dən aylıq aggregate götür
+    const trends = await MonthlySalary.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(userId),
+          month: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year:  { $year:  "$month" },
+            month: { $month: "$month" }
+          },
+          gross:         { $sum: "$gross" },
+          net:           { $sum: "$net"   },
+          employeeTax:   { $sum: "$employeeTaxes.total" },
+          employerTax:   { $sum: "$employerTaxes.total" },
+          employeeCount: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
+
+    const data = trends.map(item => {
+      const date  = new Date(item._id.year, item._id.month - 1, 1);
+      const taxes = (item.employeeTax || 0) + (item.employerTax || 0);
+      return {
+        month:         date.toLocaleDateString("az-AZ", { month: "short", year: "numeric" }),
+        rawDate:       date.toISOString(),
+        gross:         Number(item.gross.toFixed(2)),
+        net:           Number(item.net.toFixed(2)),
+        taxes:         Number(taxes.toFixed(2)),
+        employeeCount: item.employeeCount
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("getPaymentTrends error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 };

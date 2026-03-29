@@ -7,7 +7,8 @@ import {
   getTaxBreakdown,
   createAccountingEntries,
   getAccountingEntries,
-  exportComprehensivePayrollExcel
+  exportComprehensivePayrollExcel,
+  getPaymentTrends
 } from "../controllers/payrollController.js";
 import protect from "../middlewares/authMiddleware.js";
 
@@ -78,7 +79,7 @@ const router = express.Router();
  *         description: Yanlış məlumat
  */
 router.post("/calculate", protect, calculateTaxes);
-
+router.get("/trends", protect, getPaymentTrends);
 /**
  * @swagger
  * /api/payroll/examples:

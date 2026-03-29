@@ -44,6 +44,10 @@ app.set("trust proxy", 1); // bu X-Forwarded-For header üçün mütləqdir
 
 // --- Middlewares ---
 app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // frontend-in portu
+  credentials: true,
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
