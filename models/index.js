@@ -5,10 +5,13 @@ import EmployeeFlow from "./EmployeeFlow.js";
 import AccountingEntry from "./AccountingEntry.js";
 import AssetCategory from "./AssetCategory.js";
 import Asset from "./Asset.js";
+import Location from "./Location.js";
+import Category from "./Category.js";
 import { ExcelReport, PdfReport, CategoryReport, DepartmentReport } from "./Report.js";
 
 export {
   User,
+  Category,
   Event,
   Payment,
   EmployeeFlow,
@@ -18,5 +21,6 @@ export {
   ExcelReport,
   PdfReport,
   CategoryReport,
-  DepartmentReport
+  DepartmentReport,
+  Location
 };

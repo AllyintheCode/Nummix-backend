@@ -1,5 +1,5 @@
 // controllers/employeeController.js
-import Employee from "../models/Employee.js";
+import Employee , { MonthlySalary }  from "../models/Employee.js";
 import mongoose from "mongoose";
 import taxCalculationService from "../services/taxCalculationService.js";
 import multer from 'multer';
@@ -15,20 +15,34 @@ export const createEmployee = async (req, res) => {
     console.log('📦 Request body fields:', Object.keys(req.body || {}));
     
     // FormData'dan gələn məlumatları al
-    const employeeData = {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      email: req.body.email,
-      position: req.body.position,
-      Department: req.body.Department,
-      gross: req.body.gross ? parseFloat(req.body.gross) : 0,
-      hireDate: req.body.hireDate || new Date(),
-      phone: req.body.phone,
-      tin: req.body.tin,
-      idSerialNumber: req.body.idSerialNumber,
-      employeeType: req.body.employeeType || 'private',
-      companyId: req.body.companyId || (req.user ? req.user._id : null)
-    };
+  const employeeData = {
+  firstName: req.body.firstName,
+  lastName: req.body.lastName,
+  email: req.body.email,
+  position: req.body.position,
+  Department: req.body.Department,
+  gross: req.body.gross ? parseFloat(req.body.gross) : 0,
+  hireDate: req.body.hireDate || new Date(),
+  phone: req.body.phone,
+  tin: req.body.tin,
+  idSerialNumber: req.body.idSerialNumber,
+  employeeType: req.body.employeeType || 'private',
+  companyId: req.body.companyId || (req.user ? req.user._id : null),
+
+  // ✅ YENİ
+  internshipPeriod: req.body.internshipPeriod
+    ? parseInt(req.body.internshipPeriod)
+    : null,
+  contractDuration: req.body.contractDuration
+    ? parseInt(req.body.contractDuration)
+    : null,
+  contractStartDate: req.body.contractStartDate
+    ? new Date(req.body.contractStartDate)
+    : null,
+  contractEndDate: req.body.contractEndDate
+    ? new Date(req.body.contractEndDate)
+    : null,
+};
 
     console.log('💰 Gross dəyəri (frontend\'den):', employeeData.gross);
     console.log('📊 Employee data:', employeeData);
@@ -181,7 +195,6 @@ export const getAllEmployees = async (req, res) => {
     if (department) filter.Department = department;
     if (salary_status) filter.salary_status = salary_status;
     if (status) filter.status = status;
-    else filter.status = 'active'; // Default olaraq aktiv işçilər
 
     console.log('🔍 Filter criteria:', filter);
 
@@ -428,6 +441,7 @@ export const getEmployeeById = async (req, res) => {
 
 // ✅ İşçi məlumatlarını yenilə (AVTOMATİK VERGİ İLƏ)
 export const updateEmployee = async (req, res) => {
+  
   try {
     const updateData = req.body;
 
@@ -437,6 +451,7 @@ export const updateEmployee = async (req, res) => {
       updateData.data = req.file.buffer;
       updateData.originalName = req.file.originalname;
       updateData.fileSize = req.file.size;
+      
     }
 
 
@@ -444,7 +459,7 @@ export const updateEmployee = async (req, res) => {
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true, runValidators: true }
+      { new: true, runValidators: false }
     ).select("-data");
 
     if (!employee) {
@@ -1409,42 +1424,57 @@ export const getAttendanceStats = async (req, res) => {
 };
 export const getWeeklySummary = async (req, res) => {
   try {
-    const { weekStart } = req.query; // Məsələn: 2025-03-24 (bazar ertəsi)
+    const { weekStart } = req.query;
     if (!weekStart) {
       return res.status(400).json({ success: false, message: "weekStart tələb olunur" });
     }
 
     const start = new Date(weekStart);
     const end = new Date(start);
-    end.setDate(start.getDate() + 6); // həftənin sonu (bazar)
+    end.setDate(start.getDate() + 6);
 
     const employees = await Employee.find().select("attendances");
 
     const weekDays = [];
+    let prevAttendance = null;
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
-      let present = 0, late = 0, involuntary = 0; // involuntary = 'absent' və ya 'on_leave' deyil
+      // UTC offset problemi olmadan tarix string-i
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      let present = 0, late = 0, involuntary = 0;
 
       employees.forEach(emp => {
         const att = (emp.attendances || []).find(a => a.date === dateStr);
         if (att) {
           if (att.status === 'present' || att.status === 'remote') present++;
-          else if (att.isLate || att.status === 'late') late++;
-          else if (att.status === 'absent') involuntary++;
+          if (att.isLate || att.status === 'late') late++;  // present + late eyni vaxtda ola bilər
+          if (att.status === 'absent') involuntary++;
         }
       });
 
       const total = employees.length;
-      const attendance = total ? ((present + late) / total * 100).toFixed(1) : 0;
+      const attendancePct = total ? parseFloat(((present + late) / total * 100).toFixed(1)) : 0;
+
+      // Real trend hesabla
+      const trendingUp = prevAttendance === null ? true : attendancePct >= prevAttendance;
+      prevAttendance = attendancePct;
+
+      // Frontend-in gözlədiyi 'Mon', 'Tue' formatı
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayKey = dayNames[d.getDay()];
 
       weekDays.push({
-        day: d.toLocaleDateString('az-AZ', { weekday: 'short' }), // "B.e", "Ç.a" ...
+        day: dayKey,       // 'Mon', 'Tue' və s.
         date: dateStr,
         present,
         late,
         involuntary,
-        attendance: parseFloat(attendance),
-        trendingUp: true // Gerçək trend hesablamaq istəyirsinizsə əvvəlki günlə müqayisə edin
+        attendance: attendancePct,
+        trendingUp
       });
     }
 
@@ -2625,5 +2655,485 @@ export const getAllLeavesForCompany = async (req, res) => {
       success: false,
       message: error.message 
     });
+  }
+};
+export const terminateEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { terminationDate } = req.body; // ISO string, yoxdursa indiki tarix
+
+    const terminationDateObj = terminationDate ? new Date(terminationDate) : new Date();
+
+    // Statik metodu çağır
+    const result = await Employee.terminateAndSettle(id, terminationDateObj);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        employee: result.employee,
+        monthlySalary: result.monthlySalary,
+        settlement: result.settlement
+      },
+      message: 'İşçi uğurla işdən çıxarıldı və son haqq-hesab yaradıldı'
+    });
+  } catch (error) {
+    console.error('Termination error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'İşçi işdən çıxarılarkən xəta baş verdi'
+    });
+  }
+};
+// controller və ya servis hissəsində
+export const getMonthlyPayrollDynamics = async (req, res) => {
+  try {
+    const { companyId } = req.user;
+
+    // Son 12 ay
+    const endDate = new Date();
+    endDate.setDate(1);
+
+    const startDate = new Date(endDate);
+    startDate.setMonth(startDate.getMonth() - 11);
+
+    const stats = await MonthlySalary.aggregate([
+      {
+        $match: {
+          companyId: mongoose.Types.ObjectId(companyId),
+          month: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$month" } },
+          gross: { $sum: "$gross" },
+          net:   { $sum: "$net" },
+          employeeTaxesTotal: { $sum: { $ifNull: ["$employeeTaxes.total", 0] } },
+          employerTaxesTotal: { $sum: { $ifNull: ["$employerTaxes.total", 0] } },
+          employeeCount: { $sum: 1 }
+        }
+      },
+      {
+        $addFields: {
+          taxes: { $add: ["$employeeTaxesTotal", "$employerTaxesTotal"] }
+        }
+      },
+      { $sort: { "_id": 1 } }
+    ]);
+
+    // Formatlaşdırma
+    const formattedData = stats.map(item => {
+      const [year, monthNum] = item._id.split('-');
+      const date = new Date(year, parseInt(monthNum) - 1, 1);
+
+      return {
+        month: date.toLocaleString('az-AZ', { month: 'short', year: 'numeric' }), // "Mart 2026"
+        gross: Number(item.gross || 0),
+        net:   Number(item.net || 0),
+        taxes: Number(item.taxes || 0),
+        employeeCount: Number(item.employeeCount || 0),
+        originalMonth: item._id
+      };
+    });
+
+    console.log("✅ getMonthlyPayrollDynamics - Nəticə:", formattedData);
+
+    res.json({ 
+      success: true, 
+      data: formattedData 
+    });
+
+  } catch (error) {
+    console.error("getMonthlyPayrollDynamics xətası:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Aylıq dinamika alınarkən xəta baş verdi" 
+    });
+  }
+};
+
+// ===================== PAYROLL TRENDS (Maaş Fondu Dinamikası) =====================
+
+
+// Əlavə olaraq: Son 1 ayın ümumi məlumatı (dashboard üçün faydalı ola bilər)
+export const getCurrentMonthPayroll = async (req, res) => {
+  try {
+    const { companyId } = req.user || req.query;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const result = await MonthlySalary.aggregate([
+      {
+        $match: {
+          companyId,
+          month: { $gte: monthStart }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalGross: { $sum: "$gross" },
+          totalNet: { $sum: "$net" },
+          totalTaxes: { $sum: "$employeeTaxes.total" },
+          employeeCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: result[0] || {
+        totalGross: 0,
+        totalNet: 0,
+        totalTaxes: 0,
+        employeeCount: 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ================= PAYROLL SUMMARY =================
+export const getCompanyPayrollSummary = async (req, res) => {
+  try {
+
+    const companyId = req.user?.companyId;
+    const { month, year } = req.query;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId tapılmadı"
+      });
+    }
+
+    const start = new Date(year, month - 1, 1);
+    const end   = new Date(year, month, 0);
+
+    const salaries = await MonthlySalary.find({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      month: { $gte: start, $lte: end }
+    }).populate("employeeId");
+
+    const employees = salaries.map(s => ({
+      id: s.employeeId._id,
+      name: `${s.employeeId.firstName} ${s.employeeId.lastName}`,
+      position: s.employeeId.position,
+      basicSalary: s.basicSalary,
+      bonus: s.bonus || 0,
+      gross: s.gross,
+      net: s.net,
+      status: s.status
+    }));
+
+    const summary = salaries.reduce((acc, s) => {
+
+      acc.totalGrossSalary += s.gross;
+      acc.totalNetSalary += s.net;
+      acc.totalBonus += s.bonus || 0;
+      acc.totalEmployees++;
+
+      return acc;
+
+    }, {
+      totalGrossSalary: 0,
+      totalNetSalary: 0,
+      totalBonus: 0,
+      totalEmployees: 0
+    });
+
+    res.json({
+      success: true,
+      data: {
+        summary,
+        employees,
+        period: {
+          month,
+          year,
+          name: `${month}/${year}`
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Payroll summary error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Payroll məlumatları alınmadı"
+    });
+  }
+};
+
+
+// ================= TAX BREAKDOWN =================
+export const getTaxBreakdown = async (req, res) => {
+  try {
+
+    const companyId = req.user?.companyId;
+    const { month, year } = req.query;
+
+    const start = new Date(year, month - 1, 1);
+    const end   = new Date(year, month, 0);
+
+    const salaries = await MonthlySalary.find({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      month: { $gte: start, $lte: end }
+    });
+
+    let employeeTaxes = {
+      incomeTax: 0,
+      dsmf: 0,
+      its: 0,
+      ish: 0,
+      gvTax: 0,
+      total: 0
+    };
+
+    let employerTaxes = {
+      total: 0
+    };
+
+    salaries.forEach(s => {
+
+      employeeTaxes.incomeTax += s.employeeTaxes.incomeTax || 0;
+      employeeTaxes.dsmf += s.employeeTaxes.dsmf || 0;
+      employeeTaxes.its += s.employeeTaxes.its || 0;
+      employeeTaxes.ish += s.employeeTaxes.ish || 0;
+      employeeTaxes.gvTax += s.employeeTaxes.gvTax || 0;
+      employeeTaxes.total += s.employeeTaxes.total || 0;
+
+      employerTaxes.total += s.employerTaxes.total || 0;
+
+    });
+
+    res.json({
+      success: true,
+      data: {
+        taxBreakdown: {
+          employeeTaxes,
+          employerTaxes
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Tax breakdown error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Vergi məlumatları alınmadı"
+    });
+  }
+};
+
+
+// ================= ACCOUNTING ENTRIES =================
+export const getAccountingEntries = async (req, res) => {
+  try {
+
+    const companyId = req.user?.companyId;
+    const { month, year, limit = 10 } = req.query;
+
+    const start = new Date(year, month - 1, 1);
+    const end   = new Date(year, month, 0);
+
+    const salaries = await MonthlySalary.find({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      month: { $gte: start, $lte: end }
+    }).limit(parseInt(limit));
+
+    const entries = [];
+
+    salaries.forEach(s => {
+
+      entries.push({
+        accountCode: "721",
+        accountName: "Əmək haqqı xərcləri",
+        debit: s.gross,
+        credit: 0
+      });
+
+      entries.push({
+        accountCode: "533",
+        accountName: "Vergi öhdəlikləri",
+        debit: 0,
+        credit: s.employeeTaxes.total
+      });
+
+    });
+
+    res.json({
+      success: true,
+      data: {
+        entries
+      }
+    });
+
+  } catch (error) {
+    console.error("Accounting entries error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Accounting entries alınmadı"
+    });
+  }
+};
+
+
+// ================= PAYROLL TRENDS =================
+export const getPaymentTrends = async (req, res) => {
+  try {
+
+    const companyId = req.user?.companyId;
+    const limitMonths = parseInt(req.query.limit) || 12;
+
+    const trends = await MonthlySalary.aggregate([
+
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+          gross: { $gt: 0 }
+        }
+      },
+
+      {
+        $group: {
+          _id: {
+            year: { $year: "$month" },
+            month: { $month: "$month" }
+          },
+          monthDate: { $first: "$month" },
+          totalGross: { $sum: "$gross" },
+          totalNet: { $sum: "$net" },
+          totalTaxes: { $sum: "$employeeTaxes.total" },
+          employeeCount: { $sum: 1 }
+        }
+      },
+
+      {
+        $project: {
+          month: "$monthDate",
+          gross: "$totalGross",
+          net: "$totalNet",
+          taxes: "$totalTaxes",
+          employeeCount: 1,
+          _id: 0
+        }
+      },
+
+      { $sort: { month: -1 } },
+      { $limit: limitMonths },
+      { $sort: { month: 1 } }
+
+    ]);
+
+    res.json({
+      success: true,
+      data: trends,
+      count: trends.length
+    });
+
+  } catch (error) {
+    console.error("Payment trends error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Maaş dinamikası alınmadı"
+    });
+  }
+};
+export const getEmployeeCareerHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id);
+
+    if (!employee) return res.status(404).json({ message: "İşçi tapılmadı" });
+
+    const startDate = new Date(employee.hireDate);
+    const endDate = employee.status === 'terminated' ? new Date(employee.terminationDate) : new Date();
+    
+    let history = [];
+    let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+
+    // İşə başladığı aydan son aya qədər dövr edirik
+    while (current <= endDate) {
+      const monthStr = current.toISOString().split('T')[0].substring(0, 7); // "2023-05"
+      
+      // Həmin ay üçün maaş məlumatı var?
+      const monthlyData = await MonthlySalary.findOne({
+        employeeId: id,
+        month: current
+      });
+
+      // Həmin ay üçün məzuniyyət yoxlanışı
+      const wasOnLeave = employee.leaves.some(leave => 
+        leave.status === 'approved' && 
+        current >= new Date(leave.startDate) && 
+        current <= new Date(leave.endDate)
+      );
+
+      history.push({
+        month: monthStr,
+        displayDate: current.toLocaleDateString('az-AZ', { month: 'long', year: 'numeric' }),
+        status: employee.status === 'terminated' && current.getMonth() === endDate.getMonth() && current.getFullYear() === endDate.getFullYear() 
+                ? 'terminated' 
+                : (wasOnLeave ? 'on_leave' : 'active'),
+        gross: monthlyData ? monthlyData.gross : (current < new Date() ? employee.gross : 0),
+        net: monthlyData ? monthlyData.net : 0,
+        isPaid: monthlyData ? monthlyData.status === 'paid' : false
+      });
+
+      // Növbəti aya keç
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    res.status(200).json({
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      hireDate: employee.hireDate,
+      terminationDate: employee.terminationDate,
+      history: history.reverse() // Ən son ayı yuxarıda göstərsin
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getEmployeeFlowStats = async (req, res) => {
+  try {
+    const { year } = req.query; // Məsələn: 2024
+    const selectedYear = parseInt(year) || new Date().getFullYear();
+
+    // 12 aylıq boş şablon yaradırıq
+    const monthlyStats = Array.from({ length: 12 }, (_, i) => ({
+      monthNumber: i + 1,
+      monthName: new Date(0, i).toLocaleString('az-AZ', { month: 'short' }),
+      hired: 0,
+      left: 0
+    }));
+
+    // Bütün işçiləri çəkirik (həm aktiv, həm çıxarılan)
+    const employees = await Employee.find({
+      companyId: req.user.companyId // Yalnız həmin şirkətin işçiləri
+    });
+
+    employees.forEach(emp => {
+      // İşə giriş statistikasını hesabla
+      if (emp.hireDate) {
+        const hDate = new Date(emp.hireDate);
+        if (hDate.getFullYear() === selectedYear) {
+          monthlyStats[hDate.getMonth()].hired += 1;
+        }
+      }
+
+      // İşdən çıxış statistikasını hesabla
+      if (emp.status === 'terminated' && emp.terminationDate) {
+        const tDate = new Date(emp.terminationDate);
+        if (tDate.getFullYear() === selectedYear) {
+          monthlyStats[tDate.getMonth()].left += 1;
+        }
+      }
+    });
+
+    res.status(200).json(monthlyStats);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

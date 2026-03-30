@@ -44,7 +44,17 @@ import {
   getAllLeavesForCompany,
   getAttendanceStats,
   getWeeklySummary,
-  getLatecomers
+  getLatecomers,
+  terminateEmployee,
+  getMonthlyPayrollDynamics,
+  getPaymentTrends,
+  getCurrentMonthPayroll,
+  getCompanyPayrollSummary,
+  getAccountingEntries,
+  getTaxBreakdown,
+  getEmployeeCareerHistory,
+  getEmployeeFlowStats
+
 } from "../controllers/employeeController.js";
 
 import protect from "../middlewares/authMiddleware.js";
@@ -494,7 +504,14 @@ const router = express.Router();
  *         $ref: '#/components/responses/NotFound'
  *       500:
  *         $ref: '#/components/responses/ServerError'
- */
+ */router.get("/employee-flow", protect, getEmployeeFlowStats);
+router.get("/summary", protect, getCompanyPayrollSummary);
+router.get("/tax-breakdown", protect, getTaxBreakdown);
+router.get("/accounting-entries", protect, getAccountingEntries);
+router.get("/payment-trends", protect, getPaymentTrends);
+
+// Cari ayın ümumi maaş məlumatı (optional)
+router.get('/current-month', getCurrentMonthPayroll);
 router.post(
   '/:id/upload',
   upload.single('file'),protect,
@@ -2099,7 +2116,7 @@ router.get("/:id/view",protect, viewEmployeeFile);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.get("/:id/image",protect, getEmployeeImage);
+router.get("/:id/image", getEmployeeImage);
 
 /**
  * @swagger
@@ -2229,6 +2246,9 @@ router.get("/reports/salaries",protect, getSalaryReport);
  */
 router.put("/salaries/bulk",protect, bulkUpdateSalaries);
 router.get("/leaves/company", protect, getAllLeavesForCompany);
-
+router.post('/:id/terminate', protect, terminateEmployee);
+router.get('/monthly-dynamics', protect, getMonthlyPayrollDynamics);
+router.get("/:id/history", getEmployeeCareerHistory);
+// Maaş fondu dinamikası (frontend-dəki chart üçün əsas endpoint)
 
 export default router;
