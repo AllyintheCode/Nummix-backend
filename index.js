@@ -1,6 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
@@ -37,7 +39,6 @@ import assetsRoutes    from "./routes/assets.js";
 import categoryRoutes  from "./routes/categoryRoutes.js";
 import locationRoutes  from "./routes/locationRoutes.js";
 import reportRoutes    from "./routes/reportsRoute.js";
-dotenv.config();
 
 const app = express();
 
@@ -123,9 +124,15 @@ app.use("/api/reports", reportRoutes);
 
 
 
-// --- DB connect ---
+// --- DB & Server Start ---
+const startServer = async () => {
+  try {
+    await connectDB();
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir 🚀`));
+  } catch (error) {
+    console.error("Server başlaya bilmədi:", error.message);
+  }
+};
 
-connectDB();
-// --- Server ---
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server ${PORT}-da işləyir 🚀`));
+startServer();

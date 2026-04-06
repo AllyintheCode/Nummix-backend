@@ -308,7 +308,7 @@ export const updateUser = async (req, res) => {
     await user.save();
 
     res.json({
-      _id: use.r_id,
+      _id: user._id,
       fullName: user.fullName,
       email: user.email,
     });
