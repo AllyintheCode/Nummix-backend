@@ -43,3 +43,4 @@ coverage/
 .expo-shared/
 
 /uploads/*
+.env
