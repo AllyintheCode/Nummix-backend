@@ -60,8 +60,7 @@ CategorySchema.methods.getUsefulLifeMonths = function() {
   return 120; // default 10 il
 };
 
-// Indexlər
-CategorySchema.index({ name: 1 }, { unique: true });
+// İndeks artıq schema-da unique: true ilə təyin edilib
 
 const Category = mongoose.model("Category", CategorySchema);
 

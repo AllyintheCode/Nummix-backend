@@ -818,7 +818,7 @@ router.post(
  *         in: query
  *         schema:
  *           type: string
- *         description: İl (məs: 2024)
+ *         description: "İl (məs: 2024)"
  *     responses:
  *       200:
  *         description: Vergi statistikaları uğurla gətirildi

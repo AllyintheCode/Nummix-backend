@@ -2132,7 +2132,7 @@ router.get("/:id/image", getEmployeeImage);
  *         name: month
  *         schema:
  *           type: string
- *         description: Ay (format: YYYY-MM)
+ *         description: "Ay (format: YYYY-MM)"
  *       - in: query
  *         name: year
  *         schema:

@@ -139,7 +139,7 @@ router.get("/stats", protect, getPaymentStats);
 
 /**
  * @swagger
- * /api/payments/schedule
+ * /api/payments/schedule:
  *   get:
  *     summary: Növbəti 7 gün üçün planlaşdırılmış ödənişlər və gəlirlər
  *     tags: [Payments]

@@ -22,7 +22,7 @@ const router = express.Router();
  * /api/cash-bank:
  *   post:
  *     summary: Yeni əməliyyat əlavə et
- *     tags:[CashAndBank]
+ *     tags: [CashAndBank]
  *     description: Yeni əməliyyat (cash və bank) əlavə edir.
  *     security:
  *       - bearerAuth: []   # JWT tələb olunur
@@ -35,7 +35,7 @@ const router = express.Router();
  *             properties:
  *               operationType:
  *                 type: string
- *                 description: Əməliyyat növü (məs: "income", "expense")
+ *                 description: "Əməliyyat növü (mes: income, expense)"
  *                 example: "income"
  *               amount:
  *                 type: number
@@ -48,7 +48,7 @@ const router = express.Router();
  *                 example: "Sales"
  *               type:
  *                 type: string
- *                 description: "cash" və ya "bank"
+ *                 description: "cash və ya bank dəyərindən biri"
  *                 example: "bank"
  *               account:
  *                 type: string

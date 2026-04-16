@@ -12,8 +12,8 @@ const router = Router();
 /**
  * @swagger
  * tags:
- *   name: Categories
- *   description: Kateqoriyaların idarə edilməsi (qeyd: kateqoriyalar bütün şirkətlər üçün ortaqdır)
+ *   - name: Categories
+ *     description: "Kateqoriyaların idarə edilməsi (qeyd: kateqoriyalar bütün şirkətlər üçün ortaqdır)"
  */
 
 /**
